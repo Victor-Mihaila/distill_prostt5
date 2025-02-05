@@ -1,0 +1,49 @@
+Metadata-Version: 2.2
+Name: distill_prostt5
+Version: 0.1.0
+Summary: Distillation Commands for ProstT5
+Author-email: George Bouras <george.bouras@adelaide.edu.au>
+Project-URL: Homepage, https://github.com/gbouras13/distill_prostt5
+Keywords: keyword,are,cool
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Natural Language :: English
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: <3.13,>=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: click>=8.0.0
+Requires-Dist: loguru>=0.5.3
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: pandas>=1.4.2
+Requires-Dist: biopython>=1.80
+Requires-Dist: datasets>=2.15
+Requires-Dist: requests>=2.25
+Requires-Dist: sentencepiece>=0.1.99
+Requires-Dist: transformers>=4.34
+Requires-Dist: torch>=2.1.2
+Requires-Dist: pyarrow>=14.0.0
+Requires-Dist: alive-progress>=3.0.1
+Requires-Dist: numpy<2,>=1.20
+Requires-Dist: h5py>=3.5
+Provides-Extra: lint
+Requires-Dist: isort; extra == "lint"
+Requires-Dist: black; extra == "lint"
+Provides-Extra: test
+Requires-Dist: pytest>=6.2.5; extra == "test"
+Requires-Dist: pytest-cov>=3.0.0; extra == "test"
+Provides-Extra: exe
+Requires-Dist: setuptools; extra == "exe"
+Requires-Dist: wheel; extra == "exe"
+Requires-Dist: build; extra == "exe"
+
+# distill_prostt5
+Distillation Commands for ProstT5

@@ -1,0 +1,2 @@
+[console_scripts]
+distill_prostt5 = distill_prostt5:main

@@ -10,9 +10,35 @@ from .CNN import CNN
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+"""
+processes the colabfold input for labels
+"""
+
+def process_amino_acid_sequence(seq: str, max_length=int):
+    ss_mapping = {
+        0: "A", 1: "C", 2: "D", 3: "E", 4: "F", 5: "G", 6: "H", 7: "I", 8: "K",
+        9: "L", 10: "M", 11: "N", 12: "P", 13: "Q", 14: "R", 15: "S", 16: "T", 17: "V",
+        18: "W", 19: "Y"
+    }
+    inverse_mapping = {v: k for k, v in ss_mapping.items()}  # Reverse mapping for encoding
+    
+    # Truncate if necessary
+    seq = seq[:max_length]
+    
+    # Map sequence to indices
+    mapped_seq = [inverse_mapping.get(aa, -100) for aa in seq]
+    
+    # Pad sequence to length max_length
+    mapped_seq += [-100] * (max_length - len(mapped_seq))
+    
+    # Convert to torch tensor
+    return torch.tensor(mapped_seq, dtype=torch.long).unsqueeze(0)
+
+
 class ProteinDataset(Dataset):
-    def __init__(self, aa_records, prost_model, prost_tokenizer,bert_tokenizer, cnn_checkpoint, max_length):
+    def __init__(self, aa_records, ss_records, prost_model, prost_tokenizer,bert_tokenizer, cnn_checkpoint, max_length):
         self.aa_records = aa_records
+        self.ss_records = ss_records
         self.prost_model = prost_model.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
         self.prost_tokenizer = prost_tokenizer
         self.bert_tokenizer = bert_tokenizer
@@ -45,11 +71,14 @@ class ProteinDataset(Dataset):
                 # generate tokens for mini ProstT5 (bert0)
 
                 bert_tokens = self.bert_tokenizer(aa_seq, return_tensors="pt", padding='max_length', truncation=True,  max_length=self.max_length)
-                # need the labels for the padding mask later for loss calc
-                # probably a better way to do this but whatever it works for now
-                bert_labels = bert_tokens.input_ids.to(self.device) # these will also be fine as the pad is 0
                 bert_input_ids = bert_tokens.input_ids.to(self.device)
                 bert_attention_mask = bert_tokens.attention_mask.to(self.device)
+
+
+                # labels for the real colabfold predictions
+
+                ss_seq = self.ss_records[key]
+                colabfold_labels = process_amino_acid_sequence(ss_seq, self.max_length)
 
                 # print("bert tokens")
                 # print(bert_input_ids)
@@ -74,7 +103,7 @@ class ProteinDataset(Dataset):
                 # Save tensors to HDF5
                 grp = h5f.create_group(str(i))
                 grp.create_dataset("input_ids", data=bert_input_ids.cpu().numpy())
-                grp.create_dataset("labels", data=bert_labels.cpu().numpy())
+                grp.create_dataset("labels", data=colabfold_labels.cpu().numpy())
                 grp.create_dataset("attention_mask", data=bert_attention_mask.cpu().numpy())
                 grp.create_dataset("target", data=logits.cpu().numpy())
                 i += 1

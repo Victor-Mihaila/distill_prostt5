@@ -12,6 +12,8 @@ We don't need to tokenize 3Di as they will never be input (this is explicitly AA
 The tokenisation matches ProstT5 just for ease 
 """
 
+
+
 class CustomTokenizer(PreTrainedTokenizer):
     def __init__(self, vocab=None, unk_token="<unk>", pad_token="<pad>", eos_token="</s>"):
         
@@ -137,12 +139,13 @@ class MPROSTT5(nn.Module):
         loss = None
         if target is not None:
 
-            # Create a mask where labels != 0 - 0 is pad in the labels
-            mask = (labels != 0)
+            # Create a mask where labels != -100 - -100 is pad in the colabfold labels
+            mask = (labels != -100)
 
             # Apply the mask to logits and target before computing loss - mask will not calc loss for padding
             masked_logits = logits[mask]
             masked_target = target[mask]
+            masked_labels = labels[mask]
 
             # print(labels)
             # print(mask)
@@ -154,7 +157,18 @@ class MPROSTT5(nn.Module):
             target_probs = F.softmax(masked_target, dim=1)
 
             # Compute KL loss
-            loss = self.kl_loss(output, target_probs)
+            kl_loss = self.kl_loss(output, target_probs)
+
+
+            # Cross-Entropy Loss
+            ce_loss = F.cross_entropy(masked_logits, masked_labels, reduction="mean")
+
+            # Combined Loss
+            # alpha is the amount of colabfold loss here
+            alpha = 0.3
+            loss = (1-alpha)* kl_loss + alpha * ce_loss  # Adjust weight as needed
+
+
             predicted_classes = torch.argmax(masked_logits, dim=1)  # Get index of max logit
             # print("pred")
             # print(predicted_classes)
@@ -163,6 +177,18 @@ class MPROSTT5(nn.Module):
             target_classes = torch.argmax(masked_target, dim=1)  # Get index of max logit
             # print("target")
             # print(target_classes)
+
+            # print("colabfold")
+            # print(masked_labels)
+            
+            #accuracy = (predicted_classes == target_classes).float().mean().item() * 100
+            #print(f"mini vs vanilla ProstT5 Accuracy: {accuracy:.2f}%")
+
+            #accuracy = (predicted_classes == masked_labels).float().mean().item() * 100
+            #print(f"mini vs colabfold Accuracy: {accuracy:.2f}%")
+
+            #accuracy = (target_classes == masked_labels).float().mean().item() * 100
+            #print(f"vanilla vs colabfold Accuracy: {accuracy:.2f}%")
 
         return TokenClassifierOutput(
             loss=loss,

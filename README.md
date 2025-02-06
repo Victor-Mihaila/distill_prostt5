@@ -11,17 +11,19 @@ pip install -e .
 
 ## Step 1 - precompute ProstT5 embeddings
 
-* This takes an amino acid protein file as input, and will write out a `.h5` file with the ProstT5-CNN logits and the tokenized input
+* This takes an amino acid protein FASTA file with corresponding 3Di FASTA as input, and will write out a `.h5` file with the ProstT5-CNN logits and the tokenized input
 
 e.g.
 
 ```bash
-distill_prostt5 precompute -i tests/test_data/phrog_3922_db_aa.fasta -p phrog_3922_db_aa.h5
+distill_prostt5 precompute -i tests/test_data/phrog_3922_db_aa.fasta -c tests/test_data/phrog_3922_db_ss.fasta -p phrog_3922_db_aa.h5
+distill_prostt5 precompute -i tests/test_data/swissprot_subset_aa_500.fasta -c tests/test_data/swissprot_subset_ss_500.fasta -p swissprot_subset_aa_500.h5
 ```
 
 ## Step 2 - merge ProstT5 embeddings
 
 * This takes a directory of `.h5` files made in step 1 as input and will write out a single `.h5` file (for training)
+* Idea is to batch on e.g. Pawsey for preparing a full training dataset
 
 ```bash
 distill_prostt5 merge -d tests/test_h5s/ -p merged.h5
@@ -30,6 +32,13 @@ distill_prostt5 merge -d tests/test_h5s/ -p merged.h5
 ## Step 3 - train 
 
 * Trains mini ProstT5 distilled model
+* Uses the ModernBertModel https://huggingface.co/docs/transformers/en/model_doc/modernbert#transformers.ModernBertModel
+* 11M params - you can see the exact architecutre in `distill_prostt5/classes/MPROSTT5_bert.py`
+* It is vanilla with 6 layers, 8 attention heads, and hidden dimension of 512
+* Will ablate this
+* The training loss is 
+
+
 
 ```bash
 distill_prostt5 train -p swissprot_subset_aa_500.h5 -e phrog_3922_db_aa.h5  -o test_out_500 

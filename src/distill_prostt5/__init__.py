@@ -4,6 +4,7 @@ import click
 import os
 import torch
 import numpy as np
+import sys
 import glob
 import torch.nn as nn
 from pathlib import Path
@@ -24,47 +25,6 @@ log_fmt = (
     "[<green>{time:YYYY-MM-DD HH:mm:ss}</green>] <level>{level: <8}</level> | "
     "<level>{message}</level>"
 )
-
-
-
-
-# @click.group()
-# def cli():
-#     "Model Distillation Script for Mini ProstT5 Embedder"
-#     pass
-
-# @click.command()
-# @click.option('-i', '--input', type=click.Path(exists=True), required=True, help='Path to the input protein AA sequences (FASTA format).')
-# @click.option('-t', '--threedi', type=click.Path(exists=True), required=True, help='Path to the input protein 3Di sequences (FASTA format).')
-# @click.option('-o', '--outpth', type=click.Path(), required=True, help='Path to save model output.')
-# @click.option('--precompute_path', type=click.Path(), required=True, help='Path to save or read precomputed embeddings.')
-# def precompute(input, threedi, outpth, precompute_path):
-#     "Precompute embeddings."
-#     click.echo(f"Precomputing embeddings from {input} and {threedi}, saving to {precompute_path}.")
-#     # Add precompute logic here
-
-# @click.command()
-# @click.option('--model_ckpt', type=click.Path(exists=True), required=True, help='Path to a pre-trained model checkpoint.')
-# @click.option('--cnn_checkpoint', type=click.Path(exists=True), help='Path to CNN checkpoint.')
-# @click.option('-o', '--outpth', type=click.Path(), required=True, help='Path to save merged output.')
-# def merge(model_ckpt, cnn_checkpoint, outpth):
-#     "Merge precomputed embeddings with model checkpoints."
-#     click.echo(f"Merging using model checkpoint {model_ckpt} and CNN checkpoint {cnn_checkpoint}, saving to {outpth}.")
-#     # Add merging logic here
-
-# @click.command()
-# @click.option('-i', '--input', type=click.Path(exists=True), required=True, help='Path to the input protein AA sequences (FASTA format).')
-# @click.option('-t', '--threedi', type=click.Path(exists=True), required=True, help='Path to the input protein 3Di sequences (FASTA format).')
-# @click.option('--model_ckpt', type=click.Path(exists=True), help='Path to a pre-trained model checkpoint (optional).')
-# @click.option('-o', '--outpth', type=click.Path(), required=True, help='Path to save model output.')
-# def train(input, threedi, model_ckpt, outpth):
-#     "Train the model."
-#     click.echo(f"Training model with input {input} and {threedi}, checkpoint {model_ckpt}, saving output to {outpth}.")
-#     # Add training logic here
-
-# cli.add_command(precompute)
-# cli.add_command(merge)
-# cli.add_command(train)
 
 
 
@@ -92,6 +52,13 @@ precompute command
     required=True,
 )
 @click.option(
+    "-c",
+    "--colabfold",
+    help="Path to 3Di colabfold input file in FASTA format",
+    type=click.Path(),
+    required=True,
+)
+@click.option(
     "-p",
     "--precompute_path",
     help="Path to output file where you want to save hdf5 embeddings and other data required for the distillation. Use suffix .h5 (for use with merge)",
@@ -103,11 +70,12 @@ precompute command
     "--max_length",
     help="Max length of input (sequences above this length will be truncated to this many characters).",
     type=int,
-    default=768,
+    default=512,
 )
 def precompute(
     ctx,
     input,
+    colabfold,
     precompute_path,
     max_length,
     **kwargs,
@@ -123,7 +91,15 @@ def precompute(
 
     # Parse FASTA files
     aa_records = {record.id: str(record.seq) for record in SeqIO.parse(input, "fasta")}
+    ss_records = {record.id: str(record.seq) for record in SeqIO.parse(colabfold, "fasta")}
     logger.info(f"Loaded {len(aa_records)} sequences from {input}")
+
+    # Check if headers match
+    if aa_records.keys() != ss_records.keys():
+        logger.warning("Headers in input and colabfold do not match!")
+        sys.exit()
+    else:
+        logger.info("Headers match successfully.")
     
     # Load ProstT5 model - needed for embedding generation
     prost_model_name = "Rostlab/ProstT5"
@@ -131,17 +107,17 @@ def precompute(
     prost_model = T5EncoderModel.from_pretrained(prost_model_name).eval().to(device)
 
 
-    logger.info(f"Starting Computing Mini ProstT5 embeddings for {len(aa_records)} sequences from {input}")
+    logger.info(f"Starting Computing ProstT5 embeddings for {len(aa_records)} sequences from {input}")
 
     # reead in the ProstT5 CNN
     repo_root = Path(__file__).parent.resolve()
     CNN_DIR = repo_root / "cnn/"    
     cnn_checkpoint_path = Path(CNN_DIR) / "cnn_chkpnt" / "model.pt"
 
-    train_set = ProteinDataset(aa_records, prost_model, prost_tokenizer, bert_tokenizer, cnn_checkpoint_path, max_length)
+    train_set = ProteinDataset(aa_records, ss_records, prost_model, prost_tokenizer, bert_tokenizer, cnn_checkpoint_path, max_length)
     train_set.process_and_save(precompute_path) # dataset.h5
 
-    logger.info(f"Finished Computing Mini ProstT5 embeddings for {len(aa_records)} sequences from {input}")
+    logger.info(f"Finished Computing ProstT5 embeddings for {len(aa_records)} sequences from {input}")
     logger.info(f"Saved to {precompute_path}")
 
 
@@ -239,7 +215,6 @@ def merge(
     default=16
 )
 @click.option(
-    "-e",
     "--epochs",
     help="Epochs",
     type=int,
@@ -277,7 +252,7 @@ def train(
         logging_strategy="steps",
         evaluation_strategy="steps",
         eval_steps=25,
-        save_steps=1000,     
+        save_steps=5000,     
         logging_steps=25,
         learning_rate=3e-4,
         warmup_ratio=0.1,

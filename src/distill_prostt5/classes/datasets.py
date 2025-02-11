@@ -114,6 +114,7 @@ class ProteinDataset(Dataset):
 
 """
 Define reading dataset once precomputed and merged
+Merging changes the 
 """
 
 class PrecomputedProteinDataset(Dataset):
@@ -122,7 +123,7 @@ class PrecomputedProteinDataset(Dataset):
         self.h5f = h5py.File(self.hdf5_path, "r")
 
     def __len__(self):
-        return len(self.h5f.keys())
+        return self.h5f['input_ids'].shape[0]
 
     def __getitem__(self, idx):
         input_ids = torch.tensor(self.h5f['input_ids'][idx], dtype=torch.long)

@@ -284,6 +284,12 @@ def merge(
     type=int,
     default=25,
 )
+@click.option(
+    "--num_workers",
+    help="Number of workers for dataloader (default to 1)",
+    type=int,
+    default=1,
+)
 def train(
     ctx,
     train_path,
@@ -300,6 +306,7 @@ def train(
     learning_rate,
     save_steps,
     logging_eval_steps,
+    num_workers,
     **kwargs,
 ):
     """Trains distilled Mini ProstT5 model"""
@@ -331,6 +338,8 @@ def train(
         per_device_train_batch_size=batch_size, # batch size
         gradient_accumulation_steps=1, 
         num_train_epochs=epochs,
+        dataloader_num_workers=num_workers, 
+        dataloader_pin_memory=True,  # Optimizes performance on GPU
     )
 
     # Initialize Trainer

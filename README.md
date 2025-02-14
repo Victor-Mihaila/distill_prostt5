@@ -50,6 +50,18 @@ distill_prostt5 merge -d tests/test_h5s/ -p merged.h5
 distill_prostt5 train -p swissprot_subset_aa_500.h5 -e phrog_3922_db_aa.h5  -o test_out_500 
 ```
 
+* To train using DDP
+
+```
+torchrun \
+    --nproc_per_node=$NUM_GPUS_PER_NODE \
+    --nnodes=$SLURM_JOB_NUM_NODES \
+    --rdzv_id=$SLURM_JOB_ID \
+    --rdzv_backend=c10d \
+    --rdzv_endpoint="$RDZV_HOST:$RDZV_PORT" \
+    distill_prostt5/run.py train ...
+```
+
 ```bash
 Usage: distill_prostt5 train [OPTIONS]
 
@@ -84,4 +96,22 @@ Options:
                                 25)
   ```
 
- 
+ ## Step 4 - infer
+
+ ```bash
+ distill_prostt5 infer -i tests/test_data/swissprot_subset_aa_50.fasta -o test_infer -m checkpoint-308000/
+ ```
+
+ ```bash
+ Usage: distill_prostt5 infer [OPTIONS]
+
+  Infers 3Di from input AA FASTA
+
+Options:
+  -h, --help             Show this message and exit.
+  -i, --input PATH       Input FASTA  [required]
+  -o, --output_dir PATH  Output directory  [required]
+  -m, --model_ckpt PATH  Model checkpoint directory (to predict 3Di using
+                         this)
+  --cpu                  Use cpus only.
+  ```

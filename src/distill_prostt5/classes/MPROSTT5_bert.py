@@ -244,14 +244,14 @@ class MPROSTT5(nn.Module):
             # print("colabfold")
             # print(masked_labels)
             
-            accuracy = (predicted_classes == target_classes).float().mean().item() * 100
-            print(f"mini vs vanilla ProstT5 Accuracy: {accuracy:.2f}%")
+            # accuracy = (predicted_classes == target_classes).float().mean().item() * 100
+            # print(f"mini vs vanilla ProstT5 Accuracy: {accuracy:.2f}%")
 
-            accuracy = (predicted_classes == masked_labels).float().mean().item() * 100
-            print(f"mini vs colabfold Accuracy: {accuracy:.2f}%")
+            # accuracy = (predicted_classes == masked_labels).float().mean().item() * 100
+            # print(f"mini vs colabfold Accuracy: {accuracy:.2f}%")
 
-            accuracy = (target_classes == masked_labels).float().mean().item() * 100
-            print(f"vanilla vs colabfold Accuracy: {accuracy:.2f}%")
+            # accuracy = (target_classes == masked_labels).float().mean().item() * 100
+            # print(f"vanilla vs colabfold Accuracy: {accuracy:.2f}%")
 
             # some class balance code - didn't make much of a difference but not 100% sure is correct
         

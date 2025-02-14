@@ -45,7 +45,8 @@ dependencies = [
         "alive-progress >=3.0.1",
         "numpy >=1.20,<2",
         "h5py >=3.5",
-        "accelerate>=0.26.0"
+        "accelerate>=0.26.0",
+        "tqdm >=4.30.0"
     ]
 
 [project.scripts]

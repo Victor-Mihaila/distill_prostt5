@@ -64,6 +64,23 @@ mkdir -p $OUTDIR
 distill_prostt5 merge -d $OUTDIR -p train.h5
 ```
 
+* This make a 1.1TB file. So to send back to Pawsey for production:
+
+```
+head  -c 1G train_reformat.h5 | md5sum
+dd6ee0e0a57d1883172ecc4a9dc66737  -
+tail  -c 1G train_reformat.h5 | md5sum
+c533b21b0dfbba3c7d740771efec4b1f  -
+split -b 20G --numeric-suffixes train_reformat.h5 train_split_part_
+```
+
+* And once sent to Pawsey
+```
+cat train_split_part_* > train_reformat.h5
+head  -c 1G train_reformat.h5 | md5sum
+tail  -c 1G train_reformat.h5 | md5sum
+```
+
 * Did this on Adelaide HPC due to superior Lustre file system
 * test and valid simpler
 

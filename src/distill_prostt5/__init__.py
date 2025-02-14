@@ -5,20 +5,26 @@ import os
 import torch
 import numpy as np
 import sys
+from Bio import SeqIO
+from typing import Any, Dict, List, Optional, Tuple, Union
+from safetensors.torch import load_file
+from Bio.SeqFeature import FeatureLocation, SeqFeature
 import glob
 import torch.nn as nn
 from pathlib import Path
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-from transformers import TrainingArguments, Trainer, T5Tokenizer, T5EncoderModel
+from transformers import TrainingArguments, Trainer, T5Tokenizer, T5EncoderModel, AutoModelForMaskedLM, AutoTokenizer
 from tqdm import tqdm
 #from MPROSTT5_bert import MPROSTT5, CustomTokenizer  # Import the mini ProstT5 model
 import h5py
 from Bio import SeqIO
+from  tqdm import tqdm
 from loguru import logger
 
 from distill_prostt5.classes.MPROSTT5_bert import MPROSTT5, CustomTokenizer
 from distill_prostt5.classes.datasets import ProteinDataset, PrecomputedProteinDataset
+from distill_prostt5.utils.inference import write_predictions, toCPU
 
 
 log_fmt = (
@@ -178,7 +184,6 @@ def merge(
             with h5py.File(file_path, "r") as f:
             # Iterate over the groups in the current file
                 for group_name in f.keys():
-                    print(current_index)
                     group = f[group_name]
                 # Iterate over the datasets in the group and save them individually
                     for name, data in group.items():
@@ -356,6 +361,197 @@ def train(
     else:
         trainer.train()
     
+
+@main_cli.command()
+@click.help_option("--help", "-h")
+@click.pass_context
+@click.option(
+    "-i",
+    "--input",
+    help="Input FASTA",
+    type=click.Path(),
+    required=True,
+)
+@click.option(
+    "-o",
+    "--output_dir",
+    help="Output directory",
+    type=click.Path(),
+    required=True,
+)
+@click.option(
+    "-m",
+    "--model_ckpt",
+    help="Model checkpoint directory (to predict 3Di using this) ",
+    type=click.Path()
+)
+@click.option(
+            "--cpu",
+            is_flag=True,
+            help="Use cpus only.",
+)
+def infer(
+    ctx,
+    input,
+    output_dir,
+    model_ckpt,
+    cpu,
+    **kwargs,
+):
+    """Infers 3Di from input AA FASTA"""
+
+    if cpu:
+        device = 'cpu'
+    else:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    output_3di: Path = Path(output_dir) / "output_3di.fasta"
+
+    # get training dataset
+
+    # Dictionary to store the records
+    cds_dict = {}
+    # need a dummmy nested dict
+    cds_dict["proteins"] = {}
+
+    with open(input, "rt") as handle:  # handles gzip too
+        records = list(SeqIO.parse(handle, "fasta"))
+        if not records:
+            logger.warning(f"No proteins were found in your input file {input}.")
+            logger.error(
+                f"Your input file {input} is likely not a amino acid FASTA file. Please check this."
+            )
+        for record in records:
+            prot_id = record.id
+            feature_location = FeatureLocation(0, len(record.seq))
+            # Seq needs to be saved as the first element in list hence the closed brackets [str(record.seq)]
+            seq_feature = SeqFeature(
+                feature_location,
+                type="CDS",
+                qualifiers={
+                    "ID": record.id,
+                    "description": record.description,
+                    "translation": str(record.seq),
+                },
+            )
+
+            cds_dict["proteins"][prot_id] = seq_feature
+
+    if not cds_dict:
+        logger.error(f"Error: no AA protein sequences found in {input} file")
+
+
+    model = MPROSTT5()
+    state_dict = load_file(f"{model_ckpt}/model.safetensors")
+    model.load_state_dict(state_dict)
+    tokenizer = CustomTokenizer()
+
+    model.to(device)
+    model.eval()
+
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    total_params = sum(p.numel() for p in model_parameters)
+    logger.info(f"Mini ProstT5 Total Parameters: {total_params}")
+
+    predictions = {}
+    # taken from Phold, just for ease, definitely dont need to extra nesting level of the dictionary
+    for record_id, cds_records in cds_dict.items():
+            # instantiate the nested dict
+            predictions[record_id] = {}
+            seq_record_dict = cds_dict[record_id]
+            seq_dict = {}
+
+            # gets the seq_dict with key for id and the translation
+            for key, seq_feature in seq_record_dict.items():
+                # get the protein seq for normal
+                seq_dict[key] = seq_feature.qualifiers["translation"]
+
+            # sort sequences by length to trigger OOM at the beginning
+            seq_dict = dict(
+                sorted(seq_dict.items(), key=lambda kv: len(kv[1][0]), reverse=True)
+            )
+
+            batch = list()
+            max_batch = 5
+            max_residues = 100000
+            max_seq_len = 10000
+
+            for seq_idx, (pdb_id, seq) in tqdm(enumerate(seq_dict.items(), 1), total=len(seq_dict), desc="Processing Sequences"):
+                # replace non-standard AAs
+                seq = seq.replace("U", "X").replace("Z", "X").replace("O", "X")
+                seq_len = len(seq)
+                batch.append((pdb_id, seq, seq_len))
+
+                # count residues in current batch and add the last sequence length to
+                # avoid that batches with (n_res_batch > max_residues) get processed
+                n_res_batch = sum([s_len for _, _, s_len in batch]) + seq_len
+                if (
+                    len(batch) >= max_batch
+                    or n_res_batch >= max_residues
+                    or seq_idx == len(seq_dict)
+                    or seq_len > max_seq_len
+                ):
+                    pdb_ids, seqs, seq_lens = zip(*batch)
+                    batch = list()
+
+                    inputs = tokenizer.batch_encode_plus(
+                        seqs,
+                        add_special_tokens=True,
+                        padding="longest",
+                        return_tensors="pt",
+                    ).to(device)
+                    inputs = {k: v for k, v in inputs.items() if k != "token_type_ids"}
+                    #inputs = {k: v for k, v in inputs.items() if k != "token_type_ids"}
+                    inputs = {k: v.to(device) for k, v in inputs.items()}
+                    try:
+                        with torch.no_grad():
+                            outputs = model(**inputs)
+                    except RuntimeError:
+                        logger.warning(f" number of residues in batch {n_res_batch}")
+                        logger.warning(f" seq length is {seq_len}")
+                        logger.warning(f" ids are {pdb_ids}")
+                        logger.warning(
+                            "RuntimeError during embedding for {} (L={})".format(
+                                pdb_id, seq_len
+                            )
+                        )
+                        continue
+
+                
+
+                    try:
+
+                        logits = outputs.logits
+
+                        # batch-size x seq_len x embedding_dim
+                        # extra token is added at the end of the seq
+                        for batch_idx, identifier in enumerate(pdb_ids):
+                            s_len = seq_lens[batch_idx]
+
+                            # slice off padding 
+                            pred = logits[batch_idx, 0:s_len, :].squeeze()
+
+                            pred = toCPU(
+                                torch.max(pred, dim=1, keepdim=True)[1]
+                            ).astype(np.byte)
+
+
+
+                            predictions[record_id][identifier] = pred
+                            
+
+
+                    except IndexError:
+                        logger.warning(
+                            "Index error during prediction for {} (L={})".format(
+                                pdb_id, seq_len
+                            )
+                        )
+
+
+    write_predictions(predictions, output_3di)
 
 
 

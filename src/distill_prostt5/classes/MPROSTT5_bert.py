@@ -200,11 +200,9 @@ class MPROSTT5(nn.Module):
         self.kl_loss = nn.KLDivLoss(reduction="batchmean")
 
     def forward(self, input_ids=None, labels=None, attention_mask=None, target=None):
-        print(input_ids.shape)
         outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
         last_hidden_states = outputs.last_hidden_state 
         logits = self.projection(last_hidden_states)  # projection to ProstT5 size # B  x seq_len x embedding dim (20)
-        print(logits.shape)
         loss = None
         if target is not None:
 
@@ -236,15 +234,15 @@ class MPROSTT5(nn.Module):
             loss = (1-alpha)* kl_loss + alpha * ce_loss  # Adjust weight as needed
 
             predicted_classes = torch.argmax(masked_logits, dim=1)  
-            print("pred")
-            print(predicted_classes)
+            # print("pred")
+            # print(predicted_classes)
             target_classes = torch.argmax(masked_target, dim=1)  
 
-            print("vanilla")
-            print(target_classes)
+            # print("vanilla")
+            # print(target_classes)
 
-            print("colabfold")
-            print(masked_labels)
+            # print("colabfold")
+            # print(masked_labels)
             
             accuracy = (predicted_classes == target_classes).float().mean().item() * 100
             print(f"mini vs vanilla ProstT5 Accuracy: {accuracy:.2f}%")

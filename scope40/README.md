@@ -22,10 +22,12 @@ cat scope40_fasta/* > all_scope40.fasta
 * Get 3Dis
 
 ```bash
-distill_prostt5 infer -i all_scope40.fasta -o all_scope_infer -m ../checkpoint-167000/
+distill_prostt5 infer -i all_scope40.fasta -o all_scope_infer -m ../checkpoint-184000/
+# for the larger model
+# distill_prostt5 infer -i all_scope40.fasta -o all_scope_infer -m ../checkpoint-215000/ --num_heads 10 --num_layers 10 --hidden_size 560
 conda activate pholdENV
 phold proteins-predict -i all_scope40.fasta -d ../../phold_db -t 1 -o all_scope_phold_proteins_predict
-phold createdb --fasta_aa all_scope40.fasta --fasta_3di all_scope_infer/output_3di.fasta -o all_scope40_fs_db
+phold createdb --fasta_aa all_scope40.fasta --fasta_3di all_scope_infer/output_3di.fasta -o all_scope40_fs_db -f
 phold createdb --fasta_aa all_scope40.fasta --fasta_3di all_scope_phold_proteins_predict/phold_3di.fasta -o all_scope40_prostt5_fs_db
 ```
 * Run foldseek (v10 via conda)
@@ -33,7 +35,7 @@ phold createdb --fasta_aa all_scope40.fasta --fasta_3di all_scope_phold_proteins
 
 ```
 mkdir -p rawoutput
-THREADS=16
+THREADS=32
 foldseek easy-search all_scope40_fs_db/phold_foldseek_db scop-pdb/ rawoutput/mini_vs_pdb tmp/ --threads $THREADS -s 9.5 --max-seqs 2000 -e 10
 foldseek easy-search all_scope40_fs_db/phold_foldseek_db all_scope40_fs_db/phold_foldseek_db rawoutput/mini_vs_mini tmp/ --threads $THREADS -s 9.5 --max-seqs 2000 -e 10
 foldseek easy-search all_scope40_prostt5_fs_db/phold_foldseek_db scop-pdb/ rawoutput/prostt5_vs_pdb tmp/ --threads $THREADS -s 9.5 --max-seqs 2000 -e 10
@@ -53,7 +55,7 @@ mkdir -p rocx
 ./bench.awk scop_lookup.fix.tsv <(cat rawoutput/mini_vs_pdb) > rocx/mini_vs_pdb.rocx
 ./bench.awk scop_lookup.fix.tsv <(cat rawoutput/mini_vs_mini) > rocx/mini_vs_mini.rocx
 ./bench.awk scop_lookup.fix.tsv <(cat rawoutput/prostt5_vs_pdb) > rocx/prostt5_vs_pdb.rocx
-./bench.awk scop_lookup.fix.tsv <(cat rawoutput/mini_vs_mini) > rocx/prostt5_vs_prostt5.rocx
+./bench.awk scop_lookup.fix.tsv <(cat rawoutput/prostt5_vs_prostt5) > rocx/prostt5_vs_prostt5.rocx
 ./bench.awk scop_lookup.fix.tsv <(cat rawoutput/foldseekaln) > rocx/foldseekaln.rocx
 ```
 
@@ -61,7 +63,7 @@ mkdir -p rocx
 ## calculate auc
 awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/mini_vs_pdb.rocx
 awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/mini_vs_mini.rocx
-awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/mini_vs_pdb.rocx
+awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/prostt5_vs_pdb.rocx
 awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/prostt5_vs_prostt5.rocx
 awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/foldseekaln.rocx
 ```

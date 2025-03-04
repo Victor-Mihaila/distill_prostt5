@@ -386,6 +386,24 @@ def train(
     type=click.Path()
 )
 @click.option(
+    "--num_layers",
+    help="Number of layers (default to 6)",
+    type=int,
+    default=6
+)
+@click.option(
+    "--num_heads",
+    help="Number of attention heads (default to 8)",
+    type=int,
+    default=8,
+)
+@click.option(
+    "--hidden_size",
+    help="Hidden size (default to 512)",
+    type=int,
+    default=512,
+)
+@click.option(
             "--cpu",
             is_flag=True,
             help="Use cpus only.",
@@ -395,6 +413,9 @@ def infer(
     input,
     output_dir,
     model_ckpt,
+    num_layers,
+    num_heads,
+    hidden_size,
     cpu,
     **kwargs,
 ):
@@ -442,8 +463,9 @@ def infer(
     if not cds_dict:
         logger.error(f"Error: no AA protein sequences found in {input} file")
 
+    # only use swiglu
 
-    model = MPROSTT5()
+    model = MPROSTT5(hidden_size=hidden_size, num_layers=num_layers,num_heads=num_heads)
     state_dict = load_file(f"{model_ckpt}/model.safetensors")
     model.load_state_dict(state_dict)
     tokenizer = CustomTokenizer()

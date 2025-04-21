@@ -20,8 +20,19 @@ e.g.
 ```bash
 distill_prostt5 precompute --no_logits -i tests/test_data/phrog_3922_db_aa.fasta -c tests/test_data/phrog_3922_db_ss.fasta  -p test.hdf5 -m 512
 distill_prostt5 precompute --no_logits -i tests/test_data/swissprot_subset_aa_500.fasta -c tests/test_data/swissprot_subset_ss_500.fasta -p swissprot_subset_aa_500.h5
+
 ```
 
+* Actual command
+
+```bash
+python scripts/filter_fastas.py -c 10000clusters.fasta -i fasta/prostT5_dataset.fasta -o prostT5_filt_aa.fasta
+python scripts/filter_fastas.py -c 10000clusters.fasta -i fasta/prostT5_dataset_ss.fasta  -o prostT5_filt_ss.fasta
+
+
+distill_prostt5 precompute --no_logits -i prostT5_filt_aa.fasta -c prostT5_filt_ss.fasta -p prostT5_training.h5
+distill_prostt5 precompute --no_logits -i 10000clusters.fasta -c 10000clusters_ss.fasta -p prostT5_validation.h5
+```
 
 ## Step 2 - train 
 

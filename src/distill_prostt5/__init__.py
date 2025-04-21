@@ -104,7 +104,8 @@ def precompute(
     # Parse FASTA files
     aa_records = {record.id: str(record.seq) for record in SeqIO.parse(input, "fasta")}
     ss_records = {record.id: str(record.seq) for record in SeqIO.parse(colabfold, "fasta")}
-    logger.info(f"Loaded {len(aa_records)} sequences from {input}")
+    logger.info(f"Loaded {len(aa_records)} AA sequences from {input}")
+    logger.info(f"Loaded {len(ss_records)} 3Di sequences from {input}")
 
     # Check if headers match
     if aa_records.keys() != ss_records.keys():

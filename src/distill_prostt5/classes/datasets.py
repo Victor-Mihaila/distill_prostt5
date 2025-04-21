@@ -10,9 +10,10 @@ from .CNN import CNN
 from torch.utils.data import Dataset
 from tqdm import tqdm
 import numpy as np
+from random import randint
 
 """
-processes the colabfold input for labels
+processes the colabfold input for labels - these are the 20 class outputs
 """
 
 def process_amino_acid_sequence(seq: str, max_length=int):
@@ -113,14 +114,82 @@ class ProteinDataset(Dataset):
 
 
 """
+For no Logits
+"""
+
+class ProteinDatasetNoLogits(Dataset):
+    def __init__(self, aa_records, ss_records, bert_tokenizer,  max_length):
+        self.aa_records = aa_records
+        self.ss_records = ss_records
+        self.bert_tokenizer = bert_tokenizer
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.max_length = max_length
+        self.data = []
+
+    def __len__(self):
+        return len(self.aa_records)  # Return the number of items in your dataset
+
+    def process_and_save(self, save_path):
+        with h5py.File(save_path, "w") as h5f:
+            index = 0 
+            total_groups = len(self.aa_records)
+            h5f.create_dataset('input_ids', (total_groups,), dtype=h5py.special_dtype(vlen=np.int32))
+            h5f.create_dataset('labels', (total_groups,), dtype=h5py.special_dtype(vlen=np.int32))
+            h5f.create_dataset('attention_mask', (total_groups,), dtype=h5py.special_dtype(vlen=np.int32))
+            h5f.create_dataset('target', (total_groups,), dtype=h5py.special_dtype(vlen=np.int32))
+
+            #for key  in self.aa_records.keys():
+            i = 0
+            for key in tqdm(self.aa_records.keys(), desc="Processing sequences"):
+
+
+                # generate tokens for ProstT5 embedding generation
+                aa_seq = self.aa_records[key]
+                ss_seq = self.ss_records[key]
+
+                # Apply random cropping
+                if len(aa_seq) > self.max_length:
+                    start = randint(0, len(aa_seq) - self.max_length)
+                    aa_seq = aa_seq[start:start + self.max_length]
+                    ss_seq = ss_seq[start:start + self.max_length]
+
+                bert_tokens = self.bert_tokenizer(aa_seq, return_tensors="pt", 
+                                                    padding='max_length', truncation=True,  
+                                                    max_length=self.max_length)
+                bert_input_ids = bert_tokens.input_ids.to(self.device)
+                bert_attention_mask = bert_tokens.attention_mask.to(self.device)
+
+                # labels for the real colabfold predictions
+
+                colabfold_labels = process_amino_acid_sequence(ss_seq, self.max_length)
+
+                # print("bert tokens")
+                # print(bert_input_ids)
+                # print(bert_input_ids.shape)
+
+                # to generate the ProstT5 logits
+
+                # Save tensors to HDF5
+                h5f["input_ids"][index] = bert_input_ids.cpu().numpy()
+                h5f["labels"][index] = colabfold_labels.cpu().numpy()
+                h5f["attention_mask"][index] = bert_attention_mask.cpu().numpy()
+                h5f["target"][index] = colabfold_labels.cpu().numpy()
+                index += 1
+
+
+        print(f"Dataset saved to {save_path}")   
+
+
+"""
 Define reading dataset once precomputed and merged
 Merging changes the 
 """
 
 class PrecomputedProteinDataset(Dataset):
-    def __init__(self, hdf5_path):
+    def __init__(self, hdf5_path, no_logits):
         self.hdf5_path = hdf5_path
         self.h5f = h5py.File(self.hdf5_path, "r")
+        self.no_logits = no_logits
 
     def __len__(self):
         return self.h5f['input_ids'].shape[0]
@@ -137,4 +206,5 @@ class PrecomputedProteinDataset(Dataset):
             "attention_mask": attention_mask.squeeze(0),
             "target": target.squeeze(0)
         }
+
 

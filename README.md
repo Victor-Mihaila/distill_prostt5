@@ -9,6 +9,41 @@ cd distill_prostt5
 pip install -e . 
 ```
 
+# Prod - Proceed with no Logits and `-a 1`
+
+## Step 1 - tokenise input data
+
+* This takes an amino acid protein FASTA file with corresponding 3Di FASTA as input, and will write out a `.h5` file with tokenized input
+
+e.g.
+
+```bash
+distill_prostt5 precompute --no_logits -i tests/test_data/phrog_3922_db_aa.fasta -c tests/test_data/phrog_3922_db_ss.fasta  -p test.hdf5 -m 512
+distill_prostt5 precompute --no_logits -i tests/test_data/swissprot_subset_aa_500.fasta -c tests/test_data/swissprot_subset_ss_500.fasta -p swissprot_subset_aa_500.h5
+```
+
+
+## Step 2 - train 
+
+* Trains mini ProstT5 distilled model
+* USE `-a 1 --no_logits` to enforce only CE loss 
+* Uses the ModernBertModel https://huggingface.co/docs/transformers/en/model_doc/modernbert#transformers.ModernBertModel
+* 11M params by default - you can see the exact architecutre in `distill_prostt5/classes/MPROSTT5_bert.py`
+* It is vanilla with 6 layers, 8 attention heads, and hidden dimension of 512
+
+```bash
+ distill_prostt5 train -p test.hdf5 -e swissprot_subset_aa_500.h5  -o test_out_500_nl --no_logits  -a 1
+```
+
+
+
+
+
+
+
+
+# Testing (Logits vs no Logits)
+
 ## Step 1 - precompute ProstT5 embeddings
 
 * This takes an amino acid protein FASTA file with corresponding 3Di FASTA as input, and will write out a `.h5` file with the ProstT5-CNN logits and the tokenized input

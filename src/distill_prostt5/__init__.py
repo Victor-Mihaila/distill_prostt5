@@ -23,7 +23,7 @@ from  tqdm import tqdm
 from loguru import logger
 
 from distill_prostt5.classes.MPROSTT5_bert import MPROSTT5, CustomTokenizer
-from distill_prostt5.classes.datasets import ProteinDataset, PrecomputedProteinDataset
+from distill_prostt5.classes.datasets import ProteinDataset, PrecomputedProteinDataset, ProteinDatasetNoLogits
 from distill_prostt5.utils.inference import write_predictions, toCPU
 
 
@@ -78,12 +78,18 @@ precompute command
     type=int,
     default=512,
 )
+@click.option(
+    "--no_logits",
+    help="Only tokenize & randomly crop sequences, do not embed and calculate logits.",
+    is_flag=True,
+)
 def precompute(
     ctx,
     input,
     colabfold,
     precompute_path,
     max_length,
+    no_logits,
     **kwargs,
 ):
     """precomputes ProstT5 embeddings for distillation and tokenises input"""
@@ -106,23 +112,30 @@ def precompute(
         sys.exit()
     else:
         logger.info("Headers match successfully.")
-    
-    # Load ProstT5 model - needed for embedding generation
-    prost_model_name = "Rostlab/ProstT5"
-    prost_tokenizer = T5Tokenizer.from_pretrained(prost_model_name)
-    prost_model = T5EncoderModel.from_pretrained(prost_model_name).eval().to(device)
 
-    logger.info(f"Starting Computing ProstT5 embeddings for {len(aa_records)} sequences from {input}")
+    if no_logits:
+        train_set = ProteinDatasetNoLogits(aa_records, ss_records, bert_tokenizer, max_length)
+        train_set.process_and_save(precompute_path) # dataset.h5
+        logger.info(f"Finished Tokenising and randomly cropping sequences for {len(aa_records)} sequences from {input}")
 
-    # reead in the ProstT5 CNN
-    repo_root = Path(__file__).parent.resolve()
-    CNN_DIR = repo_root / "cnn/"    
-    cnn_checkpoint_path = Path(CNN_DIR) / "cnn_chkpnt" / "model.pt"
 
-    train_set = ProteinDataset(aa_records, ss_records, prost_model, prost_tokenizer, bert_tokenizer, cnn_checkpoint_path, max_length)
-    train_set.process_and_save(precompute_path) # dataset.h5
+    else:
+        # Load ProstT5 model - needed for embedding generation
+        prost_model_name = "Rostlab/ProstT5"
+        prost_tokenizer = T5Tokenizer.from_pretrained(prost_model_name)
+        prost_model = T5EncoderModel.from_pretrained(prost_model_name).eval().to(device)
 
-    logger.info(f"Finished Computing ProstT5 embeddings for {len(aa_records)} sequences from {input}")
+        logger.info(f"Starting Computing ProstT5 embeddings for {len(aa_records)} sequences from {input}")
+
+        # reead in the ProstT5 CNN
+        repo_root = Path(__file__).parent.resolve()
+        CNN_DIR = repo_root / "cnn/"    
+        cnn_checkpoint_path = Path(CNN_DIR) / "cnn_chkpnt" / "model.pt"
+
+        train_set = ProteinDataset(aa_records, ss_records, prost_model, prost_tokenizer, bert_tokenizer, cnn_checkpoint_path, max_length, no_logits)
+        train_set.process_and_save(precompute_path) # dataset.h5
+
+        logger.info(f"Finished Computing ProstT5 embeddings for {len(aa_records)} sequences from {input}")
     logger.info(f"Saved to {precompute_path}")
 
 
@@ -295,6 +308,11 @@ def merge(
     type=int,
     default=1,
 )
+@click.option(
+    "--no_logits",
+    help="Only tokenize & randomly crop sequences, do not embed and calculate logits.",
+    is_flag=True,
+)
 def train(
     ctx,
     train_path,
@@ -312,6 +330,7 @@ def train(
     save_steps,
     logging_eval_steps,
     num_workers,
+    no_logits,
     **kwargs,
 ):
     """Trains distilled Mini ProstT5 model"""
@@ -319,8 +338,8 @@ def train(
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # get training dataset
-    train_set = PrecomputedProteinDataset(train_path)  # dataset.h5
-    eval_set = PrecomputedProteinDataset(eval_path)  # dataset.h5
+    train_set = PrecomputedProteinDataset(train_path, no_logits)  # dataset.h5
+    eval_set = PrecomputedProteinDataset(eval_path, no_logits)  # dataset.h5
 
     # Initialize Mini ProstT5 Model
     model = MPROSTT5(hidden_size=hidden_size, num_layers=num_layers,num_heads=num_heads, alpha=alpha, activation=activation).to(device)

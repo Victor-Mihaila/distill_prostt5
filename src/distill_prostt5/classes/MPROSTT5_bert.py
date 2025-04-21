@@ -220,23 +220,36 @@ class MPROSTT5(nn.Module):
 
             # Compute softmax and log-softmax only on the masked values
             output = F.log_softmax(masked_logits, dim=1)
-            target_probs = F.softmax(masked_target, dim=1)
 
-            # Compute KL loss
-            kl_loss = self.kl_loss(output, target_probs)
+            if self.alpha < 1:
+
+                target_probs = F.softmax(masked_target, dim=1)
+
+                # Compute KL loss
+                kl_loss = self.kl_loss(output, target_probs)
 
             # Cross-Entropy Loss
             ce_loss = F.cross_entropy(masked_logits, masked_labels, reduction="mean")
 
             # Combined Loss
             # alpha is the amount of colabfold loss here
-            alpha = self.alpha # 0.3 by default
-            loss = (1-alpha)* kl_loss + alpha * ce_loss  # Adjust weight as needed
+
+            if self.alpha < 1:
+            
+                loss = (1-self.alpha)* kl_loss + self.alpha * ce_loss  # Adjust weight as needed
+
+            else:
+                loss = ce_loss
+
 
             predicted_classes = torch.argmax(masked_logits, dim=1)  
             # print("pred")
             # print(predicted_classes)
-            target_classes = torch.argmax(masked_target, dim=1)  
+            if self.alpha < 1:
+                target_classes = torch.argmax(masked_target, dim=1)  
+            else:
+                target_classes = masked_target
+
 
             # print("vanilla")
             # print(target_classes)

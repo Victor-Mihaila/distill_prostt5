@@ -44,6 +44,11 @@ distill_prostt5 precompute --no_logits -i 10000clusters.fasta -c 10000clusters_s
 
 ```bash
  distill_prostt5 train -p test.hdf5 -e swissprot_subset_aa_500.h5  -o test_out_500_nl --no_logits  -a 1
+
+  distill_prostt5 train -p prostT5_training.h5 -e prostT5_validation.h5  -o test_out --no_logits  -a 1
+  distill_prostt5 train -p prostT5_validation.h5 -e  swissprot_subset_aa_500.h5  -o test_out --no_logits  -a 1 --epochs 2 -b 4 --logging_eval_steps 1000
+  
+
 ```
 
 

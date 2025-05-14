@@ -41,6 +41,7 @@ foldseek easy-search all_scope40_fs_db/phold_foldseek_db all_scope40_fs_db/phold
 foldseek easy-search all_scope40_prostt5_fs_db/phold_foldseek_db scop-pdb/ rawoutput/prostt5_vs_pdb tmp/ --threads $THREADS -s 9.5 --max-seqs 2000 -e 10
 foldseek easy-search all_scope40_prostt5_fs_db/phold_foldseek_db all_scope40_prostt5_fs_db/phold_foldseek_db rawoutput/prostt5_vs_prostt5 tmp/ --threads $THREADS -s 9.5 --max-seqs 2000 -e 10
 foldseek easy-search scop-pdb scop-pdb/ rawoutput/foldseekaln tmp/ --threads $THREADS -s 9.5 --max-seqs 2000 -e 10
+foldseek easy-search scop-pdb scop-pdb/ rawoutput/foldseekaln_nocalpha tmp/ --threads $THREADS -s 9.5 --max-seqs 2000 -e 10 --sort-by-structure-bits 0
 ```
 
 
@@ -57,6 +58,7 @@ mkdir -p rocx
 ./bench.awk scop_lookup.fix.tsv <(cat rawoutput/prostt5_vs_pdb) > rocx/prostt5_vs_pdb.rocx
 ./bench.awk scop_lookup.fix.tsv <(cat rawoutput/prostt5_vs_prostt5) > rocx/prostt5_vs_prostt5.rocx
 ./bench.awk scop_lookup.fix.tsv <(cat rawoutput/foldseekaln) > rocx/foldseekaln.rocx
+./bench.awk scop_lookup.fix.tsv <(cat rawoutput/foldseekaln_nocalpha) > rocx/foldseekaln_nocalpha.rocx
 ```
 
 ```
@@ -66,4 +68,20 @@ awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,f
 awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/prostt5_vs_pdb.rocx
 awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/prostt5_vs_prostt5.rocx
 awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/foldseekaln.rocx
+awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/foldseekaln_nocalpha.rocx
 ```
+
+# 13 May 2025 - updates via Victor
+
+* disregard it is the same code
+
+```
+mkdir -p rocx
+## generate ROCX file
+./bench.noselfhit.awk scop_lookup.fix.tsv <(cat rawoutput/foldseekaln) > rocx/foldseekaln.rocx
+
+## calculate auc
+ awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/foldseekaln.rocx
+```
+
+

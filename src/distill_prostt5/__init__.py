@@ -449,6 +449,12 @@ def train(
     default=512,
 )
 @click.option(
+    "--mask_threshold",
+    help="Mask residues below this confidence threshold - between 0 and 100",
+    type=int,
+    default=0,
+)
+@click.option(
             "--cpu",
             is_flag=True,
             help="Use cpus only.",
@@ -462,6 +468,7 @@ def infer(
     num_heads,
     hidden_size,
     cpu,
+    mask_threshold,
     **kwargs,
 ):
     """Infers 3Di from input AA FASTA"""
@@ -586,43 +593,37 @@ def infer(
                         )
                         continue
 
-                
-
+            
                     try:
-
                         logits = outputs.logits
-
+                        #probabilities = torch.nn.functional.softmax(logits, dim=-1)
+                        probabilities = toCPU(
+                            torch.max(F.softmax(logits, dim=-1), dim=-1, keepdim=True).values
+                        )
                         # batch-size x seq_len x embedding_dim
                         # extra token is added at the end of the seq
                         for batch_idx, identifier in enumerate(pdb_ids):
                             s_len = seq_lens[batch_idx]
 
-                            # slice off padding 
+                             # slice off padding 
                             pred = logits[batch_idx, 0:s_len, :].squeeze()
-
-                     
-
-                            # probabilities = torch.nn.functional.softmax(pred, dim=-1)
-                            # print(probabilities)
-                            # print(probabilities.shape)
-
-                            # Get max softmax values
-                            # max_softmax_values = probabilities.max(dim=1, keepdim=True)[0]
-                            # print(max_softmax_values)
 
                             pred = toCPU(
                                 torch.argmax(pred, dim=1, keepdim=True)
                             ).astype(np.byte)
 
-                            #print(pred.shape)
+                            # doubles the length of time taken
+                            mean_prob = round(100 * probabilities[batch_idx, 0:s_len].mean().item(), 2)
+                            all_prob = probabilities[batch_idx, 0:s_len]
 
-                            #print(pred)
+                            # predictions[record_id][identifier] = pred
+                            predictions[record_id][identifier] = (
+                                pred,
+                                mean_prob,
+                                all_prob,
+                            )
 
-
-
-                            predictions[record_id][identifier] = pred
-                            
-
+                        
 
                     except IndexError:
                         logger.warning(
@@ -632,7 +633,7 @@ def infer(
                         )
 
 
-    write_predictions(predictions, output_3di)
+    write_predictions(predictions, output_3di, mask_threshold)
 
 
 

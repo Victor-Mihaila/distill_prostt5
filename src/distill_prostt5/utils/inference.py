@@ -7,7 +7,8 @@ from loguru import logger
 
 def write_predictions(
     predictions: Dict[str, Dict[str, Tuple[List[str], Any, Any]]],
-    out_path: Path
+    out_path: Path,
+    mask_prop_threshold: float
 ) -> None:
     """
     Write predictions to an output file.
@@ -21,7 +22,7 @@ def write_predictions(
     Returns:
         None
     """
-    # same as CNN
+    # same as CNN with extra 1 for 'X' masking
     ss_mapping = {
         0: "A",
         1: "C",
@@ -42,7 +43,8 @@ def write_predictions(
         16: "T",
         17: "V",
         18: "W",
-        19: "Y"
+        19: "Y",
+        20: "X"
     }
     
 
@@ -58,7 +60,11 @@ def write_predictions(
                 k: v for k, v in prediction_contig_dict.items() if len(v) > 0
             }
 
-
+            for key, (pred, mean_prob, all_prob) in prediction_contig_dict.items():
+                all_prob = all_prob * 100
+                for i in range(len(pred)):
+                    if all_prob[i] < mask_prop_threshold:
+                        pred[i] = 20
 
             # no contig_id
             out_f.write(
@@ -70,7 +76,7 @@ def write_predictions(
                                 list(map(lambda yhat: ss_mapping[int(yhat)], yhats))
                             ),
                         )
-                        for seq_id, yhats in prediction_contig_dict.items()
+                        for seq_id, (yhats, _, _) in prediction_contig_dict.items()
                     ]
                 )
             )

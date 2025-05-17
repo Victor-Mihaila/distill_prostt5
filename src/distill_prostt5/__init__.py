@@ -25,6 +25,7 @@ from loguru import logger
 from distill_prostt5.classes.MPROSTT5_bert import MPROSTT5, CustomTokenizer
 from distill_prostt5.classes.datasets import ProteinDataset, PrecomputedProteinDataset, ProteinDatasetNoLogits
 from distill_prostt5.utils.inference import write_predictions, toCPU
+from distill_prostt5.utils.initialisation import  init_large_from_base
 
 
 log_fmt = (
@@ -337,6 +338,40 @@ LR_SCHEDULER_CHOICES = [
     show_default=True,
     help="Type of learning rate scheduler to use."
 )
+@click.option(
+    "--initialise",
+    help="Use a smaller model to initialise the weights of the larger model",
+    is_flag=True,
+)
+@click.option(
+    "--base_path",
+    help="Base model path",
+    type=click.Path()
+)
+@click.option(
+    "--base_activation",
+    help="base model activation type - choose gelu or swiglu, defaults to swiglu",
+    type=str,
+    default='swiglu'
+)
+@click.option(
+    "--base_num_layers",
+    help="Number of layers (default to 6)",
+    type=int,
+    default=6
+)
+@click.option(
+    "--base_num_heads",
+    help="Number of attention heads (default to 8)",
+    type=int,
+    default=8,
+)
+@click.option(
+    "--base_hidden_size",
+    help="Hidden size (default to 512)",
+    type=int,
+    default=512,
+)
 def train(
     ctx,
     train_path,
@@ -356,6 +391,12 @@ def train(
     num_workers,
     no_logits,
     lr_scheduler_type,
+    initialise,
+    base_path,
+    base_activation,
+    base_num_layers,
+    base_num_heads,
+    base_hidden_size,
     **kwargs,
 ):
     """Trains distilled Mini ProstT5 model"""
@@ -367,11 +408,44 @@ def train(
     eval_set = PrecomputedProteinDataset(eval_path, no_logits)  # dataset.h5
 
     # Initialize Mini ProstT5 Model
-    model = MPROSTT5(hidden_size=hidden_size, num_layers=num_layers,num_heads=num_heads, alpha=alpha, activation=activation).to(device)
+    model = MPROSTT5(hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, alpha=alpha, activation=activation).to('cpu')
     # Print number of trainable parameters
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     total_params = sum(p.numel() for p in model_parameters)
     logger.info(f"Mini ProstT5 Total Trainable Parameters: {total_params}")
+
+    if initialise:
+
+        #base_model_config = MPROSTT5(hidden_size=base_hidden_size, num_layers=base_num_layers, num_heads=base_num_heads, alpha=alpha, activation=base_activation).to(device)
+        #base_model = base_model_config.from_pretrained(base_path)
+        #base_model = MPROSTT5.from_pretrained(base_path).to(device)
+
+        # base model config (alpha doesn't matter)
+        # instantiate model weights on cpu
+        base_model = MPROSTT5(
+            hidden_size=base_hidden_size,
+            num_layers=base_num_layers,
+            num_heads=base_num_heads,
+            alpha=alpha,
+            activation=base_activation
+        ).to("cpu")
+
+        # SLoad weights 
+        state_dict = load_file(f"{base_path}/model.safetensors")
+
+        # Load into model
+        missing, unexpected = base_model.load_state_dict(state_dict, strict=False)
+
+        # (Optional) Print issues
+        print("Missing base model keys:", missing)
+        print("Unexpected base model keys:", unexpected)
+
+        base_model.load_state_dict(state_dict, strict=True)
+        base_model = base_model.to("cpu")
+        model = init_large_from_base(base_model, model)
+        
+        # put on gpu
+        model = model.to(device)
 
     # Training arguments
     training_args = TrainingArguments(

@@ -437,9 +437,8 @@ def tile_embedding(
             raise ValueError("New embedding_dim must be larger than the old embedding_dim")
 
         # Tile the weights
-        new_embedding.weight.data = nn.Parameter(
-            tile_weight(pretrained_embedding.weight, new_embedding.weight, mode=mode),
-            requires_grad=new_embedding.weight.requires_grad,
+        new_embedding.weight.data.copy_(
+            tile_weight(pretrained_embedding.weight, new_embedding.weight, mode=mode)
         )
 
         # Handle padding_idx if it exists

@@ -451,17 +451,21 @@ def train(
         # (Optional) Print issues
         print("Missing base model keys:", missing)
         print("Unexpected base model keys:", unexpected)
-
+        
+        for name, param in model.state_dict().items():
+            print(name, param.shape)
+            if name == "projection.weight":
+                print(param.shape)
         base_model.load_state_dict(state_dict, strict=True)
         base_model = base_model.to("cpu")
-        for name, param in model.state_dict().items():
-            print(name, param)
+        #for name, param in model.state_dict().items():
+        #    print(name, param)
         model = init_large_from_base(base_model, model)
         #print(model) 
         #for name, param in base_model.state_dict().items():
         #    print(name, param)
-        for name, param in model.state_dict().items():
-            print(name, param)
+        #for name, param in model.state_dict().items():
+        #    print(name, param)
         # put on gpu
         model = model.to(device)
 

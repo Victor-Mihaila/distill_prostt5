@@ -473,6 +473,10 @@ def init_large_from_base(
 
     if hasattr(pretrained_model.model.embeddings, "norm"):
         tile_norm(pretrained_model.model.embeddings.norm, new_model.model.embeddings.norm, mode=mode)
+        tile_norm(pretrained_model.model.final_norm, new_model.model.final_norm, mode=mode)
+    
+    # projection head
+    tile_linear(pretrained_model.projection, new_model.projection, linear_type=TileLinear.default, mode=mode)
 
     # Calculate the layer mapping
     pretrained_layers = len(pretrained_model.model.layers)
@@ -480,7 +484,6 @@ def init_large_from_base(
 
     print(f"small layer count {pretrained_layers}")
     print(f"new layer count {new_layers}")
-    #layer_mapping = [round(i * pretrained_layers / new_layers) for i in range(new_layers)]
     # as HF is 0 indexed
     layer_mapping = [round(i * (pretrained_layers - 1) / (new_layers - 1)) for i in range(new_layers)]
     print(f"layer mapping {layer_mapping}")

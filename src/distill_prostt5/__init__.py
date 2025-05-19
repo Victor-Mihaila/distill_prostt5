@@ -315,6 +315,12 @@ LR_SCHEDULER_CHOICES = [
     default=512,
 )
 @click.option(
+    "--intermediate_size",
+    help="Intermediate size size (default to 512)",
+    type=int,
+    default=512,
+)
+@click.option(
     "--learning_rate",
     help="learning rate (default to 3e-4)",
     type=float,
@@ -390,6 +396,12 @@ LR_SCHEDULER_CHOICES = [
     type=int,
     default=512,
 )
+@click.option(
+    "--base_intermediate_size",
+    help="Base model Intermediate size size (default to 512)",
+    type=int,
+    default=512,
+)
 def train(
     ctx,
     train_path,
@@ -403,6 +415,7 @@ def train(
     num_layers,
     num_heads,
     hidden_size,
+    intermediate_size,
     learning_rate,
     warmup_ratio,
     save_steps,
@@ -416,6 +429,7 @@ def train(
     base_num_layers,
     base_num_heads,
     base_hidden_size,
+    base_intermediate_size,
     **kwargs,
 ):
     """Trains distilled Mini ProstT5 model"""
@@ -427,7 +441,7 @@ def train(
     eval_set = PrecomputedProteinDataset(eval_path, no_logits)  # dataset.h5
 
     # Initialize Mini ProstT5 Model
-    model = MPROSTT5(hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, alpha=alpha, activation=activation).to('cpu')
+    model = MPROSTT5(hidden_size=hidden_size, intermediate_size=intermediate_size,  num_layers=num_layers, num_heads=num_heads, alpha=alpha, activation=activation).to('cpu')
     # Print number of trainable parameters
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     total_params = sum(p.numel() for p in model_parameters)
@@ -443,6 +457,7 @@ def train(
         # instantiate model weights on cpu
         base_model = MPROSTT5(
             hidden_size=base_hidden_size,
+            intermediate_size=base_intermediate_size,
             num_layers=base_num_layers,
             num_heads=base_num_heads,
             alpha=alpha,

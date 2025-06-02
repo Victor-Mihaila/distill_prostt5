@@ -22,6 +22,7 @@ from Bio import SeqIO
 from  tqdm import tqdm
 from loguru import logger
 import random
+import shutil
 
 seed = 30
 torch.manual_seed(seed)
@@ -34,7 +35,7 @@ torch.backends.cudnn.benchmark = False
 
 from distill_prostt5.classes.MPROSTT5_bert import MPROSTT5, CustomTokenizer
 from distill_prostt5.classes.datasets import ProteinDataset, PrecomputedProteinDataset, ProteinDatasetNoLogits
-from distill_prostt5.utils.inference import write_predictions, toCPU
+from distill_prostt5.utils.inference import write_predictions, toCPU, write_probs
 from distill_prostt5.utils.initialisation import  init_large_from_base
 
 
@@ -612,6 +613,11 @@ def train(
             is_flag=True,
             help="Use cpus only.",
 )
+@click.option(
+            "--phold",
+            is_flag=True,
+            help="Phold output format.",
+)
 def infer(
     ctx,
     input,
@@ -623,6 +629,7 @@ def infer(
     intermediate_size,
     cpu,
     mask_threshold,
+    phold,
     **kwargs,
 ):
     """Infers 3Di from input AA FASTA"""
@@ -634,7 +641,16 @@ def infer(
 
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    output_3di: Path = Path(output_dir) / "output_3di.fasta"
+    if phold:
+        output_3di: Path = Path(output_dir) / "phold_3di.fasta"
+        output_path_mean: Path = Path(output_dir) / "phold_prostT5_3di_mean_probabilities.csv"
+        output_aa: Path = Path(output_dir) / "phold_aa.fasta"
+        print(f"Copying {input} to {output_aa}")
+        shutil.copy2(input, output_aa)
+
+    else:
+        output_3di: Path = Path(output_dir) / "output_3di.fasta"
+        output_path_mean: Path = Path(output_dir) / "3di_mean_probabilities.csv"
 
     # get training dataset
 
@@ -789,6 +805,8 @@ def infer(
 
 
     write_predictions(predictions, output_3di, mask_threshold)
+    write_probs(predictions,output_path_mean)
+    
 
 
 

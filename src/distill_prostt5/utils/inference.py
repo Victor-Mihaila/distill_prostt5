@@ -83,6 +83,28 @@ def write_predictions(
     logger.info(f"Finished writing results to {out_path}")
     return None
 
+def write_probs(
+    predictions: Dict[str, Dict[str, Tuple[int, float, Union[int, np.ndarray]]]],
+    output_path_mean: Path,
+) -> None:
+    """
+    Write all ProstT5 encoder + CNN probabilities and mean probabilities to output files.
+
+    Args:
+        predictions (Dict[str, Dict[str, Tuple[int, float, Union[int, np.ndarray]]]]):
+            Predictions dictionary containing contig IDs, sequence IDs, probabilities, and additional information.
+        output_path_mean (str): Path to the output file for mean probabilities.
+
+    Returns:
+        None
+    """
+    with open(output_path_mean, "w+") as out_f:
+        for contig_id, rest in predictions.items():
+            prediction_contig_dict = predictions[contig_id]
+
+            for seq_id, (N, mean_prob, N) in prediction_contig_dict.items():
+                out_f.write("{},{}\n".format(seq_id, mean_prob))
+
 def toCPU(tensor: torch.Tensor) -> np.ndarray:
     """
     Move a tensor to CPU and convert it to a NumPy array.

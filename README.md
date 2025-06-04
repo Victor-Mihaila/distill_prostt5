@@ -29,7 +29,6 @@ distill_prostt5 precompute --no_logits -i tests/test_data/swissprot_subset_aa_50
 python scripts/filter_fastas.py -c 10000clusters.fasta -i fasta/prostT5_dataset.fasta -o prostT5_filt_aa.fasta
 python scripts/filter_fastas.py -c 10000clusters.fasta -i fasta/prostT5_dataset_ss.fasta  -o prostT5_filt_ss.fasta
 
-
 distill_prostt5 precompute --no_logits -i prostT5_filt_aa.fasta -c prostT5_filt_ss.fasta -p prostT5_training.h5
 distill_prostt5 precompute --no_logits -i 10000clusters.fasta -c 10000clusters_ss.fasta -p prostT5_validation.h5
 ```
@@ -51,8 +50,11 @@ distill_prostt5 precompute --no_logits -i 10000clusters.fasta -c 10000clusters_s
 
 ```
 
+### Singletons
 
-
+```bash
+distill_prostt5 precompute --no_logits -i prostt5_dataset_singletons.fasta -c prostt5_dataset_singletons_ss.fasta -p prostT5_singletons.h5
+```
 
 
 

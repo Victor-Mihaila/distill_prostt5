@@ -5,13 +5,14 @@
 
 ```bash
 # whatever the checkpoint is
-THRESHOLD="25000"
+THRESHOLD="210000"
 conda activate pholdENV
 foldseek convert2fasta scop_foldseekdb/scop all_scope40_new.fasta
 
 # inference of 3Di from the mini models
 conda activate distill_prostt5
-distill_prostt5 infer -i all_scope40_new.fasta -o all_scope_infer -m "../checkpoint-$THRESHOLD/" --num_heads 16 --num_layers 24 --hidden_size 960 
+distill_prostt5 infer -i all_scope40_new.fasta -o all_scope_infer -m "../checkpoint-$THRESHOLD/" --num_heads 30 --num_layers 40 --hidden_size 500 --intermediate_size 3600 
+
 distill_prostt5 infer -i all_scope40_new.fasta -o all_scope_infer_25 -m "../checkpoint-$THRESHOLD/" --num_heads 16 --num_layers 24 --hidden_size 960 --mask_threshold 25
 
 # ProstT5 inference
@@ -26,6 +27,15 @@ phold createdb --fasta_aa all_scope40_new.fasta --fasta_3di all_scope_infer_25/o
 phold createdb --fasta_aa all_scope40_new.fasta --fasta_3di all_scope_phold_proteins_predict/phold_3di.fasta -o all_scope40_prostt5_fs_db -f
 phold createdb --fasta_aa all_scope40_new.fasta --fasta_3di all_scope_phold_proteins_predict_25/phold_3di.fasta -o all_scope40_prostt5_fs_db_25 -f
 
+sum/NR,supfamsum/NR,foldsum/NR}' rocx/mini_vs_pdb.rocx
+0.690223 0.364115 0.0714141
+(distill_prostt5) [a1667917@p2-log-1 scope40]$ awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/mini_vs_mini.rocx
+0.622883 0.325838 0.0670281
+
+supfamsum/NR,foldsum/NR}' rocx/mini_vs_pdb.rocx
+0.693363 0.363359 0.0718379
+(pholdENV) [a1667917@p2-log-1 scope40]$ awk '{ famsum+=$3; supfamsum+=$4; foldsum+=$5}END{print famsum/NR,supfamsum/NR,foldsum/NR}' rocx/mini_vs_mini.rocx
+0.621965 0.324607 0.0681745
 
 # Run foldseek
 mkdir -p rawoutput
@@ -101,7 +111,7 @@ cat scope40_fasta/* > all_scope40.fasta
 ```bash
 distill_prostt5 infer -i all_scope40.fasta -o all_scope_infer -m ../checkpoint-184000/
 # for the larger model
-# distill_prostt5 infer -i all_scope40.fasta -o all_scope_infer -m ../checkpoint-215000/ --num_heads 10 --num_layers 10 --hidden_size 560
+# distill_prostt5 infer -i all_scope40.fasta -o all_scope_infer -m ../checkpoint-215000/ --num_heads 30 --num_layers 40 --hidden_size 1500 --intermediate_size 3600
 conda activate pholdENV
 phold proteins-predict -i all_scope40.fasta -d ../../phold_db -t 1 -o all_scope_phold_proteins_predict
 phold createdb --fasta_aa all_scope40.fasta --fasta_3di all_scope_infer/output_3di.fasta -o all_scope40_fs_db -f

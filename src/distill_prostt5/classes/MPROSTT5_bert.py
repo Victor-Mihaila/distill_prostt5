@@ -39,6 +39,51 @@ import re
 #     return cos_sim
 
 """
+Focal Loss
+"""
+
+# def focal_loss(logits, labels, alpha=1.0, gamma=2.0, reduction="mean"):
+def focal_loss(logits, labels,  gamma=2.0, reduction="mean"):
+    """
+    logits: [N, C] unnormalized scores
+    labels: [N] ground-truth labels
+    """
+
+    # 3Di dataset frequencies
+    freqs = {
+        "A": 0.0283, "C": 0.0290, "D": 0.2436, "E": 0.0128,
+        "F": 0.0189, "G": 0.0219, "H": 0.0228, "I": 0.0191,
+        "K": 0.0168, "L": 0.0630, "M": 0.0068, "N": 0.0229,
+        "P": 0.1059, "Q": 0.0404, "R": 0.0248, "S": 0.0583,
+        "T": 0.0157, "V": 0.2156, "W": 0.0194, "Y": 0.0140
+    }
+
+    # Convert to tensor in class index order (make sure ordering matches your labels!)
+    freq_tensor = torch.tensor(list(freqs.values()))
+
+    # Inverse frequency weighting
+    alpha = 1.0 / freq_tensor
+    alpha = alpha / alpha.sum()  # normalize so sum=1
+
+    ce_loss = F.cross_entropy(logits, labels, reduction="none")  # [N]
+    pt = torch.exp(-ce_loss)
+
+    if alpha is not None:
+        # alpha should be tensor of shape [num_classes]
+        at = alpha[labels]  # pick weight per label
+    else:
+        at = 1.0
+
+    focal_loss = at * (1 - pt) ** gamma * ce_loss
+
+    if reduction == "mean":
+        return focal_loss.mean()
+    elif reduction == "sum":
+        return focal_loss.sum()
+    return focal_loss
+
+
+"""
 Define the tokenizer for Mini ProstT5 - amino acids + 3 special tokens. 
 We don't need to tokenize 3Di as they will never be input (this is explicitly AA -> 3Di convertor), so vocab size is only 28
 The tokenisation matches ProstT5 just for ease 
@@ -231,17 +276,21 @@ class MPROSTT5(nn.Module):
                 kl_loss = self.kl_loss(output, target_probs)
 
             # Cross-Entropy Loss
-            ce_loss = F.cross_entropy(masked_logits, masked_labels, reduction="mean")
+            # ce_loss = F.cross_entropy(masked_logits, masked_labels, reduction="mean")
+
+            focal_loss = focal_loss(masked_logits, masked_labels)
 
             # Combined Loss
             # alpha is the amount of colabfold loss here
 
             if self.no_logits is False:
             
-                loss = (1-self.alpha)* kl_loss + self.alpha * ce_loss  # Adjust weight as needed
+                #loss = (1-self.alpha)* kl_loss + self.alpha * ce_loss  # Adjust weight as needed
+                loss = (1-self.alpha)* kl_loss + self.alpha * focal_loss 
 
             else:
-                loss = ce_loss
+                #loss = ce_loss
+                loss = focal_loss
 
 
             predicted_classes = torch.argmax(masked_logits, dim=1)  

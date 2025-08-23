@@ -413,6 +413,17 @@ LR_SCHEDULER_CHOICES = [
     help="Restart model path",
     type=click.Path()
 )
+@click.option(
+    "--gamma",
+    help="Focal loss gamma - controls how much you down weight easy samples. Gamma = 0 is cross entropy loss ",
+    type=float,
+    default=2.0,
+)
+@click.option(
+    "--no_reweight",
+    help="No rewighting classes for focal loss",
+    is_flag=True,
+)
 def train(
     ctx,
     train_path,
@@ -443,6 +454,8 @@ def train(
     base_intermediate_size,
     restart,
     restart_path,
+    gamma,
+    no_reweight,
     **kwargs,
 ):
     """Trains distilled Mini ProstT5 model"""
@@ -475,7 +488,9 @@ def train(
             num_heads=base_num_heads,
             alpha=alpha,
             activation=base_activation,
-            no_logits=no_logits
+            no_logits=no_logits,
+            gamma=gamma,
+            no_reweight=no_reweight
         ).to("cpu")
 
         # SLoad weights 

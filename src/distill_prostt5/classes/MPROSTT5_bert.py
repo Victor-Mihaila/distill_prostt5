@@ -43,7 +43,7 @@ Focal Loss
 """
 
 # def focal_loss(logits, labels, alpha=1.0, gamma=2.0, reduction="mean"):
-def focal_loss(logits, labels,  gamma=2.0, reduction="mean"):
+def focal_loss(logits, labels,  gamma=2.0, reduction="mean", no_reweight=False):
     """
     logits: [N, C] unnormalized scores
     labels: [N] ground-truth labels
@@ -62,8 +62,11 @@ def focal_loss(logits, labels,  gamma=2.0, reduction="mean"):
     freq_tensor = torch.tensor(list(freqs.values()))
 
     # Inverse frequency weighting
-    alpha = 1.0 / freq_tensor
-    alpha = alpha / alpha.sum()  # normalize so sum=1
+    if no_reweight:
+        alpha = None
+    else:
+        alpha = 1.0 / freq_tensor
+        alpha = alpha / alpha.sum()  # normalize so sum=1
 
     ce_loss = F.cross_entropy(logits, labels, reduction="none")  # [N]
     pt = torch.exp(-ce_loss)
@@ -189,13 +192,17 @@ class MPROSTT5(nn.Module):
             num_heads=8,
             alpha=0.3, # contribution of colabfold Cross Entropy loss 
             activation='swiglu', # gelu or swiglu,
-            no_logits=False # no logits or not
+            no_logits=False, # no logits or not
+            gamma=2.0, # gamma for focal loss
+            no_reweight=False # doesn't reweight classes for focal loss
     ):
         super(MPROSTT5, self).__init__()
 
         self.tokenizer = CustomTokenizer()
         self.alpha = alpha
         self.no_logits = no_logits
+        self.gamma = gamma
+        self.no_reweight = no_reweight
 
         # https://huggingface.co/docs/transformers/en/model_doc/modernbert#transformers.ModernBertModel
 
@@ -279,7 +286,7 @@ class MPROSTT5(nn.Module):
             # Cross-Entropy Loss
             # ce_loss = F.cross_entropy(masked_logits, masked_labels, reduction="mean")
 
-            f_loss = focal_loss(masked_logits, masked_labels)
+            f_loss = focal_loss(masked_logits, masked_labels, gamma=self.gamma, reduction="mean", no_reweight = self.no_reweight)
 
             # Combined Loss
             # alpha is the amount of colabfold loss here

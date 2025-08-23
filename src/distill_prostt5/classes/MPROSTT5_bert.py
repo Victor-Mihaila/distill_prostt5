@@ -278,7 +278,7 @@ class MPROSTT5(nn.Module):
             # Cross-Entropy Loss
             # ce_loss = F.cross_entropy(masked_logits, masked_labels, reduction="mean")
 
-            focal_loss = focal_loss(masked_logits, masked_labels)
+            f_loss = focal_loss(masked_logits, masked_labels)
 
             # Combined Loss
             # alpha is the amount of colabfold loss here
@@ -286,11 +286,11 @@ class MPROSTT5(nn.Module):
             if self.no_logits is False:
             
                 #loss = (1-self.alpha)* kl_loss + self.alpha * ce_loss  # Adjust weight as needed
-                loss = (1-self.alpha)* kl_loss + self.alpha * focal_loss 
+                loss = (1-self.alpha)* kl_loss + self.alpha * f_loss 
 
             else:
                 #loss = ce_loss
-                loss = focal_loss
+                loss = f_loss
 
 
             predicted_classes = torch.argmax(masked_logits, dim=1)  

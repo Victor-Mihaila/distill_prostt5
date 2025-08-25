@@ -81,22 +81,35 @@ def focal_loss(logits, labels,  gamma=2.0, reduction="mean", no_reweight=False):
     else:
         alpha = 1.0 / freq_tensor
         alpha = alpha / alpha.sum()  # normalize so sum=1
+        
+    # log probs
+    log_probs = F.log_softmax(logits, dim=-1) 
+    probs = torch.exp(log_probs)  
 
-    ce_loss = F.cross_entropy(logits, labels, reduction="none")  # [N]
-    pt = torch.exp(-ce_loss)
+    labels = labels.long()
+
+    log_p = log_probs.gather(1, labels.unsqueeze(1)).squeeze(1)
+    pt = probs.gather(1, labels.unsqueeze(1)).squeeze(1) 
+
+
 
     if alpha is not None:
         # alpha should be tensor of shape [num_classes]
         alpha = alpha.to(labels.device)
         at = alpha[labels]  # pick weight per label
-        print(freq_tensor)
-        print(at)
-        print(logits)
-        print(labels)
     else:
         at = 1.0
+    
+    print(freq_tensor)
+    print(at)
+    print(logits)
+    print(pt)
+    print(log_p)
+    print(labels)
 
-    focal_loss = at * (1 - pt) ** gamma * ce_loss
+    focal_loss = at * -(1 - pt) ** gamma * log_p
+
+    print(focal_loss)
 
     if reduction == "mean":
         return focal_loss.mean()

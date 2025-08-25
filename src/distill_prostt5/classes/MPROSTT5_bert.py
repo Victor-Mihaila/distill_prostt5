@@ -90,7 +90,6 @@ def focal_loss(logits, labels,  gamma=2.0, reduction="mean", no_reweight=False):
         alpha = alpha.to(labels.device)
         at = alpha[labels]  # pick weight per label
         print(freq_tensor)
-        print(labels)
         print(at)
         print(logits)
         print(labels)
@@ -212,6 +211,7 @@ class MPROSTT5(nn.Module):
             alpha=0.3, # contribution of colabfold Cross Entropy loss 
             activation='swiglu', # gelu or swiglu,
             no_logits=False, # no logits or not
+            use_focal=False, # Use Focal loss 
             gamma=2.0, # gamma for focal loss
             no_reweight=False # doesn't reweight classes for focal loss
     ):
@@ -220,6 +220,7 @@ class MPROSTT5(nn.Module):
         self.tokenizer = CustomTokenizer()
         self.alpha = alpha
         self.no_logits = no_logits
+        self.use_focal = use_focal
         self.gamma = gamma
         self.no_reweight = no_reweight
 
@@ -302,10 +303,15 @@ class MPROSTT5(nn.Module):
                 # Compute KL loss
                 kl_loss = self.kl_loss(output, target_probs)
 
-            # Cross-Entropy Loss
-            # ce_loss = F.cross_entropy(masked_logits, masked_labels, reduction="mean")
+            if self.use_focal:
+                f_or_ce_loss = focal_loss(masked_logits, masked_labels, gamma=self.gamma, reduction="mean", no_reweight = self.no_reweight)
+            else:
+                # Cross-Entropy Loss
+                f_or_ce_loss = F.cross_entropy(masked_logits, masked_labels, reduction="mean")
 
-            f_loss = focal_loss(masked_logits, masked_labels, gamma=self.gamma, reduction="mean", no_reweight = self.no_reweight)
+
+
+            
 
             # Combined Loss
             # alpha is the amount of colabfold loss here
@@ -313,11 +319,11 @@ class MPROSTT5(nn.Module):
             if self.no_logits is False:
             
                 #loss = (1-self.alpha)* kl_loss + self.alpha * ce_loss  # Adjust weight as needed
-                loss = (1-self.alpha)* kl_loss + self.alpha * f_loss 
+                loss = (1-self.alpha)* kl_loss + self.alpha * f_or_ce_loss 
 
             else:
                 #loss = ce_loss
-                loss = f_loss
+                loss = f_or_ce_loss
 
 
             predicted_classes = torch.argmax(masked_logits, dim=1)  

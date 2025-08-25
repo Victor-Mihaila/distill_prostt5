@@ -414,6 +414,11 @@ LR_SCHEDULER_CHOICES = [
     type=click.Path()
 )
 @click.option(
+    "--use_focal",
+    help="Use focal loss",
+    is_flag=True,
+)
+@click.option(
     "--gamma",
     help="Focal loss gamma - controls how much you down weight easy samples. Gamma = 0 is cross entropy loss ",
     type=float,
@@ -454,6 +459,7 @@ def train(
     base_intermediate_size,
     restart,
     restart_path,
+    use_focal,
     gamma,
     no_reweight,
     **kwargs,
@@ -489,6 +495,7 @@ def train(
             alpha=alpha,
             activation=base_activation,
             no_logits=no_logits,
+            use_focal=use_focal,
             gamma=gamma,
             no_reweight=no_reweight
         ).to("cpu")

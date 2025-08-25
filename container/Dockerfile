@@ -3,7 +3,7 @@
 # docker build --build-arg GITHUB_TOKEN={token}  -t distill_prostt5:0.2.0 .  
 #
 
-FROM quay.io/pawsey/rocm-mpich-base:rocm6.3.1-mpich3.4.3-ubuntu22
+FROM quay.io/pawsey/rocm-mpich-base:rocm6.3.3-mpich3.4.3-ubuntu24.04
 
 ARG LIBFABRIC_VERSION=1.18.1
 

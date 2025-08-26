@@ -473,7 +473,15 @@ def train(
     eval_set = PrecomputedProteinDataset(eval_path)  
 
     # Initialize Mini ProstT5 Model
-    model = MPROSTT5(hidden_size=hidden_size, intermediate_size=intermediate_size,  num_layers=num_layers, num_heads=num_heads, alpha=alpha, activation=activation, no_logits=no_logits).to('cpu')
+    model = MPROSTT5(hidden_size=hidden_size, 
+                     intermediate_size=intermediate_size,  
+                     num_layers=num_layers, 
+                     num_heads=num_heads, 
+                     alpha=alpha, activation=activation, 
+                     no_logits=no_logits,
+                     use_focal=use_focal,
+                     gamma=gamma,
+                     no_reweight=no_reweight).to('cpu')
     # Print number of trainable parameters
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     total_params = sum(p.numel() for p in model_parameters)

@@ -3,7 +3,11 @@
 # docker build --build-arg GITHUB_TOKEN={token}  -t distill_prostt5:0.2.0 .  
 #
 
-FROM quay.io/pawsey/rocm-mpich-base:rocm6.3.3-mpich3.4.3-ubuntu24.04
+# FROM quay.io/pawsey/rocm-mpich-base:rocm6.3.3-mpich3.4.3-ubuntu24.04
+# FROM rocm/pytorch:rocm6.3.3_ubuntu24.04_py3.12_pytorch_release_2.4.0
+
+# original
+FROM quay.io/pawsey/rocm-mpich-base:rocm6.3.1-mpich3.4.3-ubuntu22
 
 ARG LIBFABRIC_VERSION=1.18.1
 
@@ -45,7 +49,11 @@ RUN conda clean -af -y
 
 
 ARG GITHUB_TOKEN
-RUN pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm6.3
+RUN pip install --pre torch==2.8.0.dev20250627+rocm6.3 torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm6.3
+# pin the exact version to 
+
+# https://download.pytorch.org/whl/nightly/cpu/torch-2.1.0.dev20230602%2Bcpu-cp310-cp310-linux_x86_64.whl
+
 RUN echo test13
 RUN pip install git+https://${GITHUB_TOKEN}@github.com/gbouras13/distill_prostt5.git@main
 RUN python3 -c "import torch; print(torch.__version__)" || echo "PyTorch is not installed before installing the project. "

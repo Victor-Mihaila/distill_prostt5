@@ -100,16 +100,16 @@ def focal_loss(logits, labels,  gamma=2.0, reduction="mean", no_reweight=False):
     else:
         at = 1.0
     
-    print(freq_tensor)
-    print(at)
-    print(logits)
-    print(pt)
-    print(log_p)
-    print(labels)
+    # print(freq_tensor)
+    # print(at)
+    # print(logits)
+    # print(pt)
+    # print(log_p)
+    # print(labels)
 
     focal_loss = at * -(1 - pt) ** gamma * log_p
 
-    print(focal_loss)
+    # print(focal_loss)
 
     if reduction == "mean":
         return focal_loss.mean()

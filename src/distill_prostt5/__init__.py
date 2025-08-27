@@ -429,6 +429,17 @@ LR_SCHEDULER_CHOICES = [
     help="No rewighting classes for focal loss",
     is_flag=True,
 )
+@click.option(
+    "--step_down",
+    help="Changes single layer projection (hidden_size, 20) to a 2-layer step down with SWIglu activation and intermediate dimension hidden_size // step_down_ratio ",
+    is_flag=True,
+)
+@click.option(
+    "--step_down_ratio",
+    help="Controls the intermediate dimension in the 2-layer step down intermediate dimension hidden_size // step_down_ratio  ",
+    type=int,
+    default=4,
+)
 def train(
     ctx,
     train_path,
@@ -462,6 +473,8 @@ def train(
     use_focal,
     gamma,
     no_reweight,
+    step_down,
+    step_down_ratio,
     **kwargs,
 ):
     """Trains distilled Mini ProstT5 model"""
@@ -481,7 +494,9 @@ def train(
                      no_logits=no_logits,
                      use_focal=use_focal,
                      gamma=gamma,
-                     no_reweight=no_reweight).to('cpu')
+                     no_reweight=no_reweight,
+                     step_down=step_down,
+                     step_down_ratio=step_down_ratio).to('cpu')
     
     # Print number of trainable parameters
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
@@ -506,7 +521,9 @@ def train(
             no_logits=no_logits,
             use_focal=use_focal,
             gamma=gamma,
-            no_reweight=no_reweight
+            no_reweight=no_reweight,
+            step_down=step_down,
+            step_down_ratio=step_down_ratio
         ).to("cpu")
 
         # SLoad weights 

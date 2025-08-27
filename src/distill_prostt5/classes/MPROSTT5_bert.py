@@ -214,6 +214,49 @@ class ModernBertMLPSwiGLU(nn.Module):
         input, gate = self.Wi(hidden_states).chunk(2, dim=-1) 
         return self.Wo(self.drop(self.act(input, gate)))
 
+"""
+To add a swiglu activation and a 2 level projection - v0.5.0
+
+"""
+
+
+class ProjectionSwiGLU(nn.Module):
+    def __init__(self, in_features, hidden_features=None, out_features=None, bias=True):
+        super().__init__()
+        hidden_features = hidden_features or in_features
+        out_features = out_features or in_features
+
+        # Project to two parallel streams
+        self.w = nn.Linear(in_features, hidden_features, bias=bias)
+        self.v = nn.Linear(in_features, hidden_features, bias=bias)
+
+        # Project back down
+        self.proj = nn.Linear(hidden_features, out_features, bias=bias)
+
+    def forward(self, x):
+        return self.proj(F.silu(self.v(x)) * self.w(x))
+
+
+# Example step-down projection
+class StepDownProjection(nn.Module):
+    def __init__(self, 
+                 hidden_size=512, 
+                 d_mid=256, 
+                 out_dim=20):
+        super().__init__()
+        self.fc1 = nn.Linear(hidden_size, d_mid, bias=False)
+        self.swiglu = ProjectionSwiGLU(d_mid)
+        self.fc2 = nn.Linear(d_mid, out_dim, bias=False)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.swiglu(x)
+        x = self.fc2(x)
+        return x
+
+"""
+full model
+"""
 
 class MPROSTT5(nn.Module):
     def __init__(
@@ -228,7 +271,10 @@ class MPROSTT5(nn.Module):
             no_logits=False, # no logits or not
             use_focal=False, # Use Focal loss 
             gamma=2.0, # gamma for focal loss
-            no_reweight=False # doesn't reweight classes for focal loss
+            no_reweight=False, # doesn't reweight classes for focal loss
+            step_down=False, # 2 layer stepdown - implemented in v0.5.0
+            step_down_ratio=4, # d_mid = hidden_size // step_down_ratio - make sure it is divisible by 4
+
     ):
         super(MPROSTT5, self).__init__()
 
@@ -291,7 +337,16 @@ class MPROSTT5(nn.Module):
             for layer in self.model.layers:
                 layer.mlp = ModernBertMLPSwiGLU(self.configuration)
         
-        self.projection = nn.Linear(hidden_size, 20, bias=False)  # Project to ProstT5-CNN output dimension (20 states)
+        # 2 layer step down
+        if step_down:
+            if hidden_size % step_down_ratio != 0:
+                raise ValueError(
+                    f"hidden_size={hidden_size} must be divisible by step_down_ratio={step_down_ratio}"
+                )
+            self.projection = StepDownProjection(hidden_size, d_mid=hidden_size // step_down_ratio, out_dim=20)
+        else:
+            self.projection = nn.Linear(hidden_size, 20, bias=False)  # Project to ProstT5-CNN output dimension (20 states)
+
         self.kl_loss = nn.KLDivLoss(reduction="batchmean")
 
     def forward(self, input_ids=None, labels=None, attention_mask=None, target=None):

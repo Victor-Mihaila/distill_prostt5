@@ -382,8 +382,6 @@ class MPROSTT5(nn.Module):
             plddt_logits = self.plddt_head(last_hidden_states)  # [B, L, 1]
             plddt_pred = torch.sigmoid(plddt_logits).squeeze(-1) * 100.0  # [B, L]
 
-            print(plddt_pred)
-
             # Mask prediction and target
             masked_pred = plddt_pred[mask]
             masked_target = target[mask]

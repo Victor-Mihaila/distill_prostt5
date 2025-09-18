@@ -828,6 +828,9 @@ def infer(
             
                     try:
                         logits = outputs.logits
+                        plddt_pred = outputs.plddt_pred if hasattr(outputs, "plddt_pred") else None
+
+                        
                         #probabilities = torch.nn.functional.softmax(logits, dim=-1)
                         probabilities = toCPU(
                             torch.max(F.softmax(logits, dim=-1), dim=-1, keepdim=True).values

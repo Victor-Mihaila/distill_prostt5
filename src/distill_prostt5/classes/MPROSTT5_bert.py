@@ -5,8 +5,16 @@ from transformers.modeling_outputs import TokenClassifierOutput
 import math
 from transformers import PreTrainedTokenizer, ModernBertModel, ModernBertConfig
 import re
+from transformers.utils import ModelOutput
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
-
+@dataclass
+class ProstT5Output(ModelOutput):
+    loss: Optional[torch.FloatTensor] = None
+    logits: Optional[torch.FloatTensor] = None   # token classification logits
+    plddt_pred: Optional[torch.FloatTensor] = None  # [B, L] pLDDT values
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
 
 
 # def cosine_similarity_token_composition(pred_tokens: torch.Tensor, label_tokens: torch.Tensor, vocab_size: int) -> torch.Tensor:
@@ -371,9 +379,11 @@ class MPROSTT5(nn.Module):
         last_hidden_states = outputs.last_hidden_state 
         logits = self.projection(last_hidden_states)  # projection to ProstT5 size # B  x seq_len x embedding dim (20)
         loss = None
+        plddt_pred = None
 
         # to train the plddt head
-        
+
+
         if self.plddt_head_flag and target is not None:
             # Mask out padded residues
             mask = (labels != -100)  # [B, L]
@@ -384,16 +394,10 @@ class MPROSTT5(nn.Module):
 
             # Mask prediction and target
             masked_pred = plddt_pred[mask]
-            masked_target = target[mask]
+            masked_target = target[mask]  # ensure float
 
             # Compute loss
-            loss_plddt = self.mse_loss(masked_pred, masked_target).mean()
-            
-            return TokenClassifierOutput(
-            loss=loss_plddt,
-            logits=plddt_pred,
-            hidden_states=last_hidden_states
-        )
+            loss = self.mse_loss(masked_pred, masked_target).mean()
 
         else:
 
@@ -468,11 +472,12 @@ class MPROSTT5(nn.Module):
                 print(f"vanilla vs colabfold Accuracy: {accuracy:.2f}%")
 
 
-            return TokenClassifierOutput(
-                loss=loss,
-                logits=logits,
-                hidden_states=last_hidden_states
-            )
+        return ProstT5Output(
+            loss=loss,
+            logits=logits,         # always return token logits
+            plddt_pred=plddt_pred, # only non-None if head is enabled
+            hidden_states=last_hidden_states,
+        )
 
     def tokenize_input(self, sequences):
         return self.tokenizer(sequences, padding=True, truncation=True, return_tensors="pt")

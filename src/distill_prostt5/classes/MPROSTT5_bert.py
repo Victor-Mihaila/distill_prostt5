@@ -341,11 +341,6 @@ class MPROSTT5(nn.Module):
 
        
         self.model = ModernBertModel(self.configuration)
-
-        if self.plddt_head_flag:
-            for param in self.model.parameters():
-                param.requires_grad = False
-
         
         # Replace activation function
 
@@ -374,12 +369,24 @@ class MPROSTT5(nn.Module):
             )
             self.mse_loss = nn.MSELoss(reduction='none')
 
+        # freeze for training plddt head
+
+        if self.plddt_head_flag:
+            for param in self.model.parameters():
+                param.requires_grad = False
+
+            # freeze projection so only pLDDT head trains
+            for param in self.projection.parameters():
+                param.requires_grad = False
+
+
     def forward(self, input_ids=None, labels=None, attention_mask=None, target=None):
         outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
         last_hidden_states = outputs.last_hidden_state 
         logits = self.projection(last_hidden_states)  # projection to ProstT5 size # B  x seq_len x embedding dim (20)
         loss = None
-        plddt_pred = None
+        plddt_logits = self.plddt_head(last_hidden_states)  # [B, L, 1]
+        plddt_pred = torch.sigmoid(plddt_logits).squeeze(-1) * 100.0  # [B, L]
 
         # to train the plddt head
 
@@ -387,10 +394,6 @@ class MPROSTT5(nn.Module):
         if self.plddt_head_flag and target is not None:
             # Mask out padded residues
             mask = (labels != -100)  # [B, L]
-
-            # Predict pLDDT
-            plddt_logits = self.plddt_head(last_hidden_states)  # [B, L, 1]
-            plddt_pred = torch.sigmoid(plddt_logits).squeeze(-1) * 100.0  # [B, L]
 
             # Mask prediction and target
             masked_pred = plddt_pred[mask]

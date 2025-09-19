@@ -35,7 +35,7 @@ torch.backends.cudnn.benchmark = False
 
 from distill_prostt5.classes.MPROSTT5_bert import MPROSTT5, CustomTokenizer
 from distill_prostt5.classes.datasets import ProteinDataset, PrecomputedProteinDataset, ProteinDatasetNoLogits, ProteinDatasetPlddt, PrecomputedProteinDatasetPlddt
-from distill_prostt5.utils.inference import write_predictions, toCPU, write_probs
+from distill_prostt5.utils.inference import write_predictions, toCPU, write_probs, write_plddt
 from distill_prostt5.utils.initialisation import  init_large_from_base
 
 
@@ -678,6 +678,11 @@ def train(
     type=int,
     default=4,
 )
+@click.option(
+    "--plddt_head",
+    help="Infer with plddt head",
+    is_flag=True,
+)
 def infer(
     ctx,
     input,
@@ -692,6 +697,7 @@ def infer(
     phold,
     step_down,
     step_down_ratio,
+    plddt_head,
     **kwargs,
 ):
     """Infers 3Di from input AA FASTA"""
@@ -703,6 +709,9 @@ def infer(
 
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
+    output_3di: Path = Path(output_dir) / "phold_3di.fasta"
+    output_path_mean: Path = Path(output_dir) / "phold_prostT5_3di_mean_probabilities.csv"
+    output_path_plddt: Path = Path(output_dir) / "output_plddt.json"
     if phold:
         output_3di: Path = Path(output_dir) / "phold_3di.fasta"
         output_path_mean: Path = Path(output_dir) / "phold_prostT5_3di_mean_probabilities.csv"
@@ -749,7 +758,13 @@ def infer(
 
     # only use swiglu
 
-    model = MPROSTT5(hidden_size=hidden_size, intermediate_size=intermediate_size,  num_layers=num_layers, num_heads=num_heads, step_down=step_down, step_down_ratio=step_down_ratio)
+    model = MPROSTT5(hidden_size=hidden_size, 
+    intermediate_size=intermediate_size,  
+    num_layers=num_layers, num_heads=num_heads, 
+    step_down=step_down, 
+    step_down_ratio=step_down_ratio,
+    plddt_head_flag=plddt_head)
+
     state_dict = load_file(f"{model_ckpt}/model.safetensors")
     model.load_state_dict(state_dict)
     tokenizer = CustomTokenizer()
@@ -828,9 +843,11 @@ def infer(
             
                     try:
                         logits = outputs.logits
-                        plddt_pred = outputs.plddt_pred if hasattr(outputs, "plddt_pred") else None
 
-                        
+                        if plddt_head:
+                            plddt_pred = outputs.plddt_pred
+
+
                         #probabilities = torch.nn.functional.softmax(logits, dim=-1)
                         probabilities = toCPU(
                             torch.max(F.softmax(logits, dim=-1), dim=-1, keepdim=True).values
@@ -847,16 +864,35 @@ def infer(
                                 torch.argmax(pred, dim=1, keepdim=True)
                             ).astype(np.byte)
 
+                            if plddt_head:
+
+                                plddt_slice = toCPU(plddt_pred[batch_idx, 0:s_len])
+
                             # doubles the length of time taken
                             mean_prob = round(100 * probabilities[batch_idx, 0:s_len].mean().item(), 2)
                             all_prob = probabilities[batch_idx, 0:s_len]
 
-                            # predictions[record_id][identifier] = pred
-                            predictions[record_id][identifier] = (
-                                pred,
-                                mean_prob,
-                                all_prob,
-                            )
+
+                            if plddt_head:
+
+                            
+                            
+
+                                # predictions[record_id][identifier] = pred
+                                predictions[record_id][identifier] = (
+                                    pred,
+                                    mean_prob,
+                                    all_prob,
+                                    plddt_slice
+                                )
+                            else:
+                                # predictions[record_id][identifier] = pred
+                                predictions[record_id][identifier] = (
+                                    pred,
+                                    mean_prob,
+                                    all_prob,
+                                    plddt_slice
+                                )
 
                         
 
@@ -868,8 +904,10 @@ def infer(
                         )
 
 
-    write_predictions(predictions, output_3di, mask_threshold)
-    write_probs(predictions,output_path_mean)
+    write_predictions(predictions, output_3di, mask_threshold, plddt_head)
+    write_probs(predictions,output_path_mean, plddt_head)
+    if plddt_head:
+        write_plddt(predictions,output_path_plddt)
     
 
 

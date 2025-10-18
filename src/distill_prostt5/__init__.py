@@ -799,9 +799,31 @@ def infer(
                 # get the protein seq for normal
                 seq_dict[key] = seq_feature.qualifiers["translation"]
 
-            # sort sequences by length to trigger OOM at the beginning
+            # for k, v in seq_dict.items():
+            #     if not v or len(v) == 0:
+            #         logger.info("Empty value for key:", k)
+            #     elif not isinstance(v[0], str):
+            #         logger.info("Unexpected type for key:", k, "->", type(v[0]))
+            #         fail_ids.append(k)
+
+
+
+            # Filter out entries that are empty or malformed
+            # for logan - some entries are missing sequences (because of the lack of \n I think)
+            # e.g
+            # grep ERR11457585_70038_2  nonhuman-complete.fa.zst.split/nonhuman-complete.part_016.fa
+            # >ERR11457585_70038_2 # 661 # 1926 # 1 # ID=67343_2;partial=00;start_tyDKNDMEKEIGALKKAEDAIYIDSTNMTIEEVVNKVIETIKEKM*
+            valid_seq_dict = {}
+            for k, v in seq_dict.items():
+                if v and len(v) > 0 and isinstance(v[0], str):
+                    valid_seq_dict[k] = v
+                else:
+                    logger.info(f"Protein header {k} is corrupt. It will be saved in fails.tsv")
+                    fail_ids.append(k)
+
+            # Sort only the valid ones
             seq_dict = dict(
-                sorted(seq_dict.items(), key=lambda kv: len(kv[1][0]), reverse=True)
+                sorted(valid_seq_dict.items(), key=lambda kv: len(kv[1][0]), reverse=True)
             )
 
             batch = list()

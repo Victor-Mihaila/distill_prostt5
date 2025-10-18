@@ -1,3 +1,17 @@
+
+```
+NUM_HEADS=14
+NUM_LAYERS=24
+BATCH_SIZE=72
+HIDDEN_DIM=448
+INTERMEDIATE_DIM=896
+MODEL_CHECKPOINT="/home/a1667917/a1667917/distill_prostt5/final_models/50M/checkpoint-334150"
+
+distill_prostt5 infer -i nonhuman-complete.fa.zst.split/nonhuman-complete.part_016.fa -o test_prostt5 -m $MODEL_CHECKPOINT --num_heads $NUM_HEADS --num_layers $NUM_LAYERS --hidden_size $HIDDEN_DIM --intermediate_size $INTERMEDIATE_DIM  --mask_threshold 0
+
+
+```
+
 # 13 May 2025
 
 * Update to use the scop DB in `scop_foldseekdb` from the Steinegger lab server and Foldseek v10.941cd33 (bioconda) 

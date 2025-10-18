@@ -2,6 +2,7 @@
 
 import click
 import os
+import csv
 import torch
 import numpy as np
 import sys
@@ -683,6 +684,12 @@ def train(
     help="Infer with plddt head",
     is_flag=True,
 )
+@click.option(
+    "--batch_size",
+    help="Controls inference batchsize  ",
+    type=int,
+    default=5,
+)
 def infer(
     ctx,
     input,
@@ -698,6 +705,7 @@ def infer(
     step_down,
     step_down_ratio,
     plddt_head,
+    batch_size,
     **kwargs,
 ):
     """Infers 3Di from input AA FASTA"""
@@ -776,6 +784,9 @@ def infer(
     logger.info(f"Mini ProstT5 Total Parameters: {total_params}")
 
     predictions = {}
+
+    fail_ids = []
+
     # taken from Phold, just for ease, definitely dont need to extra nesting level of the dictionary
     for record_id, cds_records in cds_dict.items():
             # instantiate the nested dict
@@ -794,9 +805,9 @@ def infer(
             )
 
             batch = list()
-            max_batch = 5
+            max_batch = batch_size
             max_residues = 100000
-            max_seq_len = 10000
+            max_seq_len = 100000
 
             for seq_idx, (pdb_id, seq) in tqdm(enumerate(seq_dict.items(), 1), total=len(seq_dict), desc="Processing Sequences"):
                 # replace non-standard AAs
@@ -837,6 +848,8 @@ def infer(
                                 pdb_id, seq_len
                             )
                         )
+                        for id in pdb_ids:
+                            fail_ids.append(id)
                         continue
 
             
@@ -901,6 +914,24 @@ def infer(
                             )
                         )
 
+                        for id in pdb_ids:
+                            fail_ids.append(id)
+                        
+                        continue
+
+
+
+    # write list of fails if length > 0
+    if len(fail_ids) > 0:
+        fail_tsv: Path = Path(output_dir) / "fails.tsv"
+
+        # Convert the list to a list of lists
+        data_as_list_of_lists = [[str(item)] for item in fail_ids]
+
+        # Write the list to a TSV file
+        with open(fail_tsv, "w", newline="") as file:
+            tsv_writer = csv.writer(file, delimiter="\t")
+            tsv_writer.writerows(data_as_list_of_lists)
 
     write_predictions(predictions, output_3di, mask_threshold, plddt_head)
     write_probs(predictions,output_path_mean, plddt_head)

@@ -2,6 +2,7 @@
 
 import click
 import os
+import csv
 import torch
 import numpy as np
 import sys
@@ -683,6 +684,12 @@ def train(
     help="Infer with plddt head",
     is_flag=True,
 )
+@click.option(
+    "--batch_size",
+    help="Controls inference batchsize  ",
+    type=int,
+    default=5,
+)
 def infer(
     ctx,
     input,
@@ -698,6 +705,7 @@ def infer(
     step_down,
     step_down_ratio,
     plddt_head,
+    batch_size,
     **kwargs,
 ):
     """Infers 3Di from input AA FASTA"""
@@ -772,11 +780,13 @@ def infer(
     model.to(device)
     model.eval()
 
-    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
-    total_params = sum(p.numel() for p in model_parameters)
+    total_params = sum(p.numel() for p in model.parameters())
     logger.info(f"Mini ProstT5 Total Parameters: {total_params}")
 
     predictions = {}
+
+    fail_ids = []
+
     # taken from Phold, just for ease, definitely dont need to extra nesting level of the dictionary
     for record_id, cds_records in cds_dict.items():
             # instantiate the nested dict
@@ -789,15 +799,53 @@ def infer(
                 # get the protein seq for normal
                 seq_dict[key] = seq_feature.qualifiers["translation"]
 
-            # sort sequences by length to trigger OOM at the beginning
+            # for k, v in seq_dict.items():
+            #     if not v or len(v) == 0:
+            #         logger.info("Empty value for key:", k)
+            #     elif not isinstance(v[0], str):
+            #         logger.info("Unexpected type for key:", k, "->", type(v[0]))
+            #         fail_ids.append(k)
+
+
+            # Filter out entries that are empty or malformed
+            # for logan - some entries are missing sequences (because of the lack of \n I think)
+            # e.g
+            # after seqkit
+            # grep ERR11457585_70038_2  nonhuman-complete.fa.zst.split/nonhuman-complete.part_016.fa
+            # >ERR11457585_70038_2 # 661 # 1926 # 1 # ID=67343_2;partial=00;start_tyDKNDMEKEIGALKKAEDAIYIDSTNMTIEEVVNKVIETIKEKM*
+
+            # zstdcat nonhuman-complete.fa.zst | grep -A10  ERR11457585_70038_2
+
+            # >ERR11457585_70038_2 # 661 # 1926 # 1 # ID=67343_2;partial=00;start_tyDKNDMEKEIGALKKAEDAIYIDSTNMTIEEVVNKVIETIKEKM*
+            #    
+            # >ERR11457585_71594_3 # 1765 # 3144 # -1 # ID=68839_3;partial=00;start_type=ATG;rbs_motif=GGAG/GAGG;rbs_spacer=5-10bp;gc_cont=0.590
+            # MELIRGLKNGMVLQRDMGTNACKITISLRGVQHPQPSLGKLEHLGGERYRLTGIPVGGPYALTLADGTRRLEFADLWVGDVWLLGGQSNMEGWGERGEAELRYDEAPLQKIRAFYLDDHWESARSQLHLPWTNHDTALAEKFLAGRGLTLAQRDCLTLADAGVGPGLFIGQYLCEQSGVPQGLIPCAFGGTCMQDWLPENLTPTSQYRHTLRRFWEIGGNVRGMFWYQGESDLNWLCAAKLHDRMEHMVAAFRKDFDLPELPFVQVQIGRTQGCDDCQLDRIAAWHKIRCLQAEMRFPLFATVSAANATYQDTIHLDTPSQRCIGKAAAMQMCSLLGREELANPVLKHIEIRQTNGHLPTNKTSVVLTYDHVIGELRADGAPSGFSVTLFDEIPYLFPNKLIHHVVLRGNQVEIVTGYSAEQLAHAFVWHGAGPNALCNVHDAEGRALLAMGPMPVCTV*
+            # >ERR11457585_71610_4 # 2018 # 2461 # -1 # ID=68854_4;partial=00;start_type=ATG;rbs_motif=GGAGG;rbs_spacer=5-10bp;gc_cont=0.473
+            # MDNTAYKNRLNAYISHLEQDEKSRATIAQYRRDIICFFEYLGSAELTKEAVLAYKRQLELKYMPVSVNAKLSALNSFFSFAGRADLELKLLKIQKRAYCPAERELSKEEYFRLVKAAGRRRNRPPFADFTDDLRHWNKGFGAEIYYR*
+
+            # zstdcat nonhuman-complete.fa.zst | grep -A10  ERR11457432_144795_1
+            # >ERR11457432_144795_1 # 102 # 575 # -1 # ID=137618_1;partial=00;start_type=ATG;rbs_motif=TAA;rDYIYVNTLKHLIADPVRTSIRWSSSHGDRFRRAGIDWEISQSGFQYAHIQ
+
+            # >ERR11457432_154121_3 # 1749 # 1883 # -1 # ID=146012_3;partial=00;start_type=ATG;rbs_motif=GGAG/GAGG;rbs_spacer=5-10bp;gc_cont=0.467
+            # MEEQQDDFFSPENIAELERRIKRLRSGESKLTERDLINPDDEKD*
+
+            valid_seq_dict = {}
+            for k, v in seq_dict.items():
+                if v and len(v) > 0 and isinstance(v[0], str):
+                    valid_seq_dict[k] = v
+                else:
+                    logger.info(f"Protein header {k} is corrupt. It will be saved in fails.tsv")
+                    fail_ids.append(k)
+
+            # Sort only the valid ones
             seq_dict = dict(
-                sorted(seq_dict.items(), key=lambda kv: len(kv[1][0]), reverse=True)
+                sorted(valid_seq_dict.items(), key=lambda kv: len(kv[1][0]), reverse=True)
             )
 
             batch = list()
-            max_batch = 5
+            max_batch = batch_size
             max_residues = 100000
-            max_seq_len = 10000
+            max_seq_len = 100000
 
             for seq_idx, (pdb_id, seq) in tqdm(enumerate(seq_dict.items(), 1), total=len(seq_dict), desc="Processing Sequences"):
                 # replace non-standard AAs
@@ -838,6 +886,8 @@ def infer(
                                 pdb_id, seq_len
                             )
                         )
+                        for id in pdb_ids:
+                            fail_ids.append(id)
                         continue
 
             
@@ -890,8 +940,7 @@ def infer(
                                 predictions[record_id][identifier] = (
                                     pred,
                                     mean_prob,
-                                    all_prob,
-                                    plddt_slice
+                                    all_prob
                                 )
 
                         
@@ -903,6 +952,24 @@ def infer(
                             )
                         )
 
+                        for id in pdb_ids:
+                            fail_ids.append(id)
+                        
+                        continue
+
+
+
+    # write list of fails if length > 0
+    if len(fail_ids) > 0:
+        fail_tsv: Path = Path(output_dir) / "fails.tsv"
+
+        # Convert the list to a list of lists
+        data_as_list_of_lists = [[str(item)] for item in fail_ids]
+
+        # Write the list to a TSV file
+        with open(fail_tsv, "w", newline="") as file:
+            tsv_writer = csv.writer(file, delimiter="\t")
+            tsv_writer.writerows(data_as_list_of_lists)
 
     write_predictions(predictions, output_3di, mask_threshold, plddt_head)
     write_probs(predictions,output_path_mean, plddt_head)
@@ -1167,10 +1234,11 @@ def train_plddt(
                      step_down_ratio=step_down_ratio,
                      plddt_head_flag=True).to('cpu')
     
-    # Print number of trainable parameters
+    # Print number of parameters
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     total_params = sum(p.numel() for p in model_parameters)
-    logger.info(f"Mini ProstT5 Total Trainable Parameters: {total_params}")
+    logger.info(f"Mini ProstT5 Total Parameters: {total_params}")
+    
 
 
     # Load weights 

@@ -1,3 +1,17 @@
+
+```
+NUM_HEADS=14
+NUM_LAYERS=24
+BATCH_SIZE=72
+HIDDEN_DIM=448
+INTERMEDIATE_DIM=896
+MODEL_CHECKPOINT="/home/a1667917/a1667917/distill_prostt5/final_models/50M/checkpoint-334150"
+
+distill_prostt5 infer -i nonhuman-complete.fa.zst.split/nonhuman-complete.part_016.fa -o test_prostt5 -m $MODEL_CHECKPOINT --num_heads $NUM_HEADS --num_layers $NUM_LAYERS --hidden_size $HIDDEN_DIM --intermediate_size $INTERMEDIATE_DIM  --mask_threshold 0
+
+
+```
+
 # 13 May 2025
 
 * Update to use the scop DB in `scop_foldseekdb` from the Steinegger lab server and Foldseek v10.941cd33 (bioconda) 
@@ -5,7 +19,7 @@
 
 ```bash
 # whatever the checkpoint is
-THRESHOLD="7287"
+THRESHOLD="2000"
 conda activate pholdENV
 foldseek convert2fasta scop_foldseekdb/scop all_scope40_new.fasta
 
@@ -13,6 +27,7 @@ foldseek convert2fasta scop_foldseekdb/scop all_scope40_new.fasta
 conda activate distill_prostt5
 distill_prostt5 infer -i all_scope40_new.fasta -o all_scope_infer -m "../checkpoint-$THRESHOLD/" --num_heads 12 --num_layers 22 --hidden_size 768 --intermediate_size 1152  --plddt_head --mask_threshold 60
 
+# distill_prostt5 infer -i test.fasta -o blah -m /home/a1667917/a1667917/distill_prostt5/final_models/12_22_90_768_1152_from_scratch_0.1/checkpoint-320784 --num_heads 12 --num_layers 22 --hidden_size 768 --intermediate_size 1152 
 
 distill_prostt5 infer -i test.fasta -o blah -m /home/a1667917/a1667917/distill_prostt5/final_models/12_22_90_768_1152_from_scratch_0.1/checkpoint-320784 --num_heads 12 --num_layers 22 --hidden_size 768 --intermediate_size 1152 
 

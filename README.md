@@ -170,48 +170,9 @@ Options:
   ```
 
 
-  # 25 August 2025.  
+# 25 August 2025.  
 
 
-* Updating the container (for focal loss) degraded performance on the original training task
-* Namely, training a 110M param model, I couldn't get the training loss to go below 2.5 (whereas on the old container it was fine)
-
-```bash
-singularity exec distill_prostt5_0.4.1.sif python -c "
-> import torch
-> print('PyTorch version:', torch.__version__)
-> print('CUDA version:', torch.version.cuda)
-> print('ROCm version:', torch.version.hip if hasattr(torch.version, 'hip') else 'N/A')
-> print('Is CUDA available?', torch.cuda.is_available())
-> print('Is ROCm available?', torch.version.hip is not None)
-> print('Available devices:', [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())])
-> "
-PyTorch version: 2.8.0.dev20250517+rocm6.3
-CUDA version: None
-ROCm version: 6.3.42131-fa1d09cbd
-Is CUDA available? False
-Is ROCm available? True
-Available devices: []
-
-singularity exec distill_prostt5_0.5.0.sif python -c "
-> import torch
-> print('PyTorch version:', torch.__version__)
-> print('CUDA version:', torch.version.cuda)
-> print('ROCm version:', torch.version.hip if hasattr(torch.version, 'hip') else 'N/A')
-> print('Is CUDA available?', torch.cuda.is_available())
-> print('Is ROCm available?', torch.version.hip is not None)
-> print('Available devices:', [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())])
-> "
-
-PyTorch version: 2.9.0.dev20250822+rocm6.3
-CUDA version: None
-ROCm version: 6.3.42134-a9a80e791
-Is CUDA available? False
-Is ROCm available? True
+* Note that is is best to build the container on top of the known working v0.4.1 container. Pytorch nightly builds caused strange, non-convergent behaviour for updated training runs
 
 
-python distill_prostt5/run.py train -p /mynvme/data/prostT5_training.h5 -e  /mynvme/data/prostT5_validation.h5  -o $OUTDIR --learning_rate 8e-4  --no_logits --warmup_ratio $WARMUP_RATIO  -a 1 --epochs 12 -b $BATCH_SIZE --logging_eval_steps 1000  --num_workers 8 --num_heads $NUM_HEADS --num_layers $NUM_LAYERS --hidden_size $HIDDEN_DIM --intermediate_size $INTERMEDIATE_DIM --save_steps 1000
-
-```
-
-curl -OL https://download.pytorch.org/whl/nightly/cpu/torch-2.1.0.dev20230602%2Bcpu-cp310-cp310-linux_x86_64.whl

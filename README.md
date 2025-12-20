@@ -175,4 +175,14 @@ Options:
 
 * Note that is is best to build the container on top of the known working v0.4.1 container. Pytorch nightly builds caused strange, non-convergent behaviour for updated training runs
 
+# 21 Dec
+
+* Update to building on top of Pawsey pytorch 2.7.1 container
+
+* Try context extension -> 
+
+```bash
+distill_prostt5 precompute --no_logits -i tests/test_data/phrog_3922_db_aa.fasta -c tests/test_data/phrog_3922_db_ss.fasta  -p test.hdf5 -m 512
+distill_prostt5 precompute --no_logits -i tests/test_data/swissprot_subset_aa_500.fasta -c tests/test_data/swissprot_subset_ss_500.fasta -p swissprot_subset_aa_500.h5
+```
 

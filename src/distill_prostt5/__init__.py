@@ -850,7 +850,7 @@ def infer(
                 pred_ids = torch.argmax(logits, dim=-1)
 
                 # --- probabilities (optional, expensive) ---
-                store_probs = False
+                store_probs = True
                 if store_probs:
                     probs = torch.softmax(logits, dim=-1).max(dim=-1).values
 
@@ -893,7 +893,7 @@ def infer(
 
     
 
-    # taken from Phold, just for ease, definitely dont need to extra nesting level of the dictionary
+    
     for record_id, cds_records in cds_dict.items():
             # instantiate the nested dict
             predictions[record_id] = {}

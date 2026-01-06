@@ -778,6 +778,8 @@ def infer(
     tokenizer = CustomTokenizer()
 
     model.to(device)
+    # half precision
+    model.half() 
     model.eval()
 
     total_params = sum(p.numel() for p in model.parameters())

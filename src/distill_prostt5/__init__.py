@@ -855,6 +855,8 @@ def infer(
 
                 # --- predictions (GPU) ---
                 pred_ids = torch.argmax(logits, dim=-1)
+                print(seqs)
+                print(pred_ids)
 
                 # --- probabilities (optional, expensive) ---
                 store_probs = True

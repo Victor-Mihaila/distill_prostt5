@@ -690,6 +690,11 @@ def train(
     type=int,
     default=5,
 )
+@click.option(
+    "--half",
+    help="Use half precision",
+    is_flag=True,
+)
 def infer(
     ctx,
     input,
@@ -706,6 +711,7 @@ def infer(
     step_down_ratio,
     plddt_head,
     batch_size,
+    half,
     **kwargs,
 ):
     """Infers 3Di from input AA FASTA"""
@@ -779,8 +785,9 @@ def infer(
 
     model.to(device)
     # half precision
-    model.half() 
-    model.eval()
+    if half:
+        model.half() 
+        model.eval()
 
     total_params = sum(p.numel() for p in model.parameters())
     logger.info(f"Mini ProstT5 Total Parameters: {total_params}")
@@ -894,174 +901,174 @@ def infer(
     
 
     
-    for record_id, cds_records in cds_dict.items():
-            # instantiate the nested dict
-            predictions[record_id] = {}
-            seq_record_dict = cds_dict[record_id]
-            seq_dict = {}
+    # for record_id, cds_records in cds_dict.items():
+    #         # instantiate the nested dict
+    #         predictions[record_id] = {}
+    #         seq_record_dict = cds_dict[record_id]
+    #         seq_dict = {}
 
-            # gets the seq_dict with key for id and the translation
-            for key, seq_feature in seq_record_dict.items():
-                # get the protein seq for normal
-                seq_dict[key] = seq_feature.qualifiers["translation"]
+    #         # gets the seq_dict with key for id and the translation
+    #         for key, seq_feature in seq_record_dict.items():
+    #             # get the protein seq for normal
+    #             seq_dict[key] = seq_feature.qualifiers["translation"]
 
-            # for k, v in seq_dict.items():
-            #     if not v or len(v) == 0:
-            #         logger.info("Empty value for key:", k)
-            #     elif not isinstance(v[0], str):
-            #         logger.info("Unexpected type for key:", k, "->", type(v[0]))
-            #         fail_ids.append(k)
+    #         # for k, v in seq_dict.items():
+    #         #     if not v or len(v) == 0:
+    #         #         logger.info("Empty value for key:", k)
+    #         #     elif not isinstance(v[0], str):
+    #         #         logger.info("Unexpected type for key:", k, "->", type(v[0]))
+    #         #         fail_ids.append(k)
 
 
-            # Filter out entries that are empty or malformed
-            # for logan - some entries are missing sequences (because of the lack of \n I think)
-            # e.g
-            # after seqkit
-            # grep ERR11457585_70038_2  nonhuman-complete.fa.zst.split/nonhuman-complete.part_016.fa
-            # >ERR11457585_70038_2 # 661 # 1926 # 1 # ID=67343_2;partial=00;start_tyDKNDMEKEIGALKKAEDAIYIDSTNMTIEEVVNKVIETIKEKM*
+    #         # Filter out entries that are empty or malformed
+    #         # for logan - some entries are missing sequences (because of the lack of \n I think)
+    #         # e.g
+    #         # after seqkit
+    #         # grep ERR11457585_70038_2  nonhuman-complete.fa.zst.split/nonhuman-complete.part_016.fa
+    #         # >ERR11457585_70038_2 # 661 # 1926 # 1 # ID=67343_2;partial=00;start_tyDKNDMEKEIGALKKAEDAIYIDSTNMTIEEVVNKVIETIKEKM*
 
-            # zstdcat nonhuman-complete.fa.zst | grep -A10  ERR11457585_70038_2
+    #         # zstdcat nonhuman-complete.fa.zst | grep -A10  ERR11457585_70038_2
 
-            # >ERR11457585_70038_2 # 661 # 1926 # 1 # ID=67343_2;partial=00;start_tyDKNDMEKEIGALKKAEDAIYIDSTNMTIEEVVNKVIETIKEKM*
-            #    
-            # >ERR11457585_71594_3 # 1765 # 3144 # -1 # ID=68839_3;partial=00;start_type=ATG;rbs_motif=GGAG/GAGG;rbs_spacer=5-10bp;gc_cont=0.590
-            # MELIRGLKNGMVLQRDMGTNACKITISLRGVQHPQPSLGKLEHLGGERYRLTGIPVGGPYALTLADGTRRLEFADLWVGDVWLLGGQSNMEGWGERGEAELRYDEAPLQKIRAFYLDDHWESARSQLHLPWTNHDTALAEKFLAGRGLTLAQRDCLTLADAGVGPGLFIGQYLCEQSGVPQGLIPCAFGGTCMQDWLPENLTPTSQYRHTLRRFWEIGGNVRGMFWYQGESDLNWLCAAKLHDRMEHMVAAFRKDFDLPELPFVQVQIGRTQGCDDCQLDRIAAWHKIRCLQAEMRFPLFATVSAANATYQDTIHLDTPSQRCIGKAAAMQMCSLLGREELANPVLKHIEIRQTNGHLPTNKTSVVLTYDHVIGELRADGAPSGFSVTLFDEIPYLFPNKLIHHVVLRGNQVEIVTGYSAEQLAHAFVWHGAGPNALCNVHDAEGRALLAMGPMPVCTV*
-            # >ERR11457585_71610_4 # 2018 # 2461 # -1 # ID=68854_4;partial=00;start_type=ATG;rbs_motif=GGAGG;rbs_spacer=5-10bp;gc_cont=0.473
-            # MDNTAYKNRLNAYISHLEQDEKSRATIAQYRRDIICFFEYLGSAELTKEAVLAYKRQLELKYMPVSVNAKLSALNSFFSFAGRADLELKLLKIQKRAYCPAERELSKEEYFRLVKAAGRRRNRPPFADFTDDLRHWNKGFGAEIYYR*
+    #         # >ERR11457585_70038_2 # 661 # 1926 # 1 # ID=67343_2;partial=00;start_tyDKNDMEKEIGALKKAEDAIYIDSTNMTIEEVVNKVIETIKEKM*
+    #         #    
+    #         # >ERR11457585_71594_3 # 1765 # 3144 # -1 # ID=68839_3;partial=00;start_type=ATG;rbs_motif=GGAG/GAGG;rbs_spacer=5-10bp;gc_cont=0.590
+    #         # MELIRGLKNGMVLQRDMGTNACKITISLRGVQHPQPSLGKLEHLGGERYRLTGIPVGGPYALTLADGTRRLEFADLWVGDVWLLGGQSNMEGWGERGEAELRYDEAPLQKIRAFYLDDHWESARSQLHLPWTNHDTALAEKFLAGRGLTLAQRDCLTLADAGVGPGLFIGQYLCEQSGVPQGLIPCAFGGTCMQDWLPENLTPTSQYRHTLRRFWEIGGNVRGMFWYQGESDLNWLCAAKLHDRMEHMVAAFRKDFDLPELPFVQVQIGRTQGCDDCQLDRIAAWHKIRCLQAEMRFPLFATVSAANATYQDTIHLDTPSQRCIGKAAAMQMCSLLGREELANPVLKHIEIRQTNGHLPTNKTSVVLTYDHVIGELRADGAPSGFSVTLFDEIPYLFPNKLIHHVVLRGNQVEIVTGYSAEQLAHAFVWHGAGPNALCNVHDAEGRALLAMGPMPVCTV*
+    #         # >ERR11457585_71610_4 # 2018 # 2461 # -1 # ID=68854_4;partial=00;start_type=ATG;rbs_motif=GGAGG;rbs_spacer=5-10bp;gc_cont=0.473
+    #         # MDNTAYKNRLNAYISHLEQDEKSRATIAQYRRDIICFFEYLGSAELTKEAVLAYKRQLELKYMPVSVNAKLSALNSFFSFAGRADLELKLLKIQKRAYCPAERELSKEEYFRLVKAAGRRRNRPPFADFTDDLRHWNKGFGAEIYYR*
 
-            # zstdcat nonhuman-complete.fa.zst | grep -A10  ERR11457432_144795_1
-            # >ERR11457432_144795_1 # 102 # 575 # -1 # ID=137618_1;partial=00;start_type=ATG;rbs_motif=TAA;rDYIYVNTLKHLIADPVRTSIRWSSSHGDRFRRAGIDWEISQSGFQYAHIQ
+    #         # zstdcat nonhuman-complete.fa.zst | grep -A10  ERR11457432_144795_1
+    #         # >ERR11457432_144795_1 # 102 # 575 # -1 # ID=137618_1;partial=00;start_type=ATG;rbs_motif=TAA;rDYIYVNTLKHLIADPVRTSIRWSSSHGDRFRRAGIDWEISQSGFQYAHIQ
 
-            # >ERR11457432_154121_3 # 1749 # 1883 # -1 # ID=146012_3;partial=00;start_type=ATG;rbs_motif=GGAG/GAGG;rbs_spacer=5-10bp;gc_cont=0.467
-            # MEEQQDDFFSPENIAELERRIKRLRSGESKLTERDLINPDDEKD*
+    #         # >ERR11457432_154121_3 # 1749 # 1883 # -1 # ID=146012_3;partial=00;start_type=ATG;rbs_motif=GGAG/GAGG;rbs_spacer=5-10bp;gc_cont=0.467
+    #         # MEEQQDDFFSPENIAELERRIKRLRSGESKLTERDLINPDDEKD*
 
-            valid_seq_dict = {}
-            for k, v in seq_dict.items():
-                if v and len(v) > 0 and isinstance(v[0], str):
-                    valid_seq_dict[k] = v
-                else:
-                    logger.info(f"Protein header {k} is corrupt. It will be saved in fails.tsv")
-                    fail_ids.append(k)
+    #         valid_seq_dict = {}
+    #         for k, v in seq_dict.items():
+    #             if v and len(v) > 0 and isinstance(v[0], str):
+    #                 valid_seq_dict[k] = v
+    #             else:
+    #                 logger.info(f"Protein header {k} is corrupt. It will be saved in fails.tsv")
+    #                 fail_ids.append(k)
 
-            # Sort only the valid ones
-            seq_dict = dict(
-                sorted(valid_seq_dict.items(), key=lambda kv: len(kv[1][0]), reverse=True)
-            )
+    #         # Sort only the valid ones
+    #         seq_dict = dict(
+    #             sorted(valid_seq_dict.items(), key=lambda kv: len(kv[1][0]), reverse=True)
+    #         )
 
-            batch = list()
-            max_batch = batch_size
-            max_residues = 100000
-            max_seq_len = 100000
+    #         batch = list()
+    #         max_batch = batch_size
+    #         max_residues = 100000
+    #         max_seq_len = 100000
 
-            for seq_idx, (pdb_id, seq) in tqdm(enumerate(seq_dict.items(), 1), total=len(seq_dict), desc="Processing Sequences"):
-                # replace non-standard AAs
-                seq = seq.replace("U", "X").replace("Z", "X").replace("O", "X")
-                seq_len = len(seq)
-                batch.append((pdb_id, seq, seq_len))
+    #         for seq_idx, (pdb_id, seq) in tqdm(enumerate(seq_dict.items(), 1), total=len(seq_dict), desc="Processing Sequences"):
+    #             # replace non-standard AAs
+    #             seq = seq.replace("U", "X").replace("Z", "X").replace("O", "X")
+    #             seq_len = len(seq)
+    #             batch.append((pdb_id, seq, seq_len))
 
-                # count residues in current batch and add the last sequence length to
-                # avoid that batches with (n_res_batch > max_residues) get processed
-                n_res_batch = sum([s_len for _, _, s_len in batch]) + seq_len
-                if (
-                    len(batch) >= max_batch
-                    or n_res_batch >= max_residues
-                    or seq_idx == len(seq_dict)
-                    or seq_len > max_seq_len
-                ):
-                    pdb_ids, seqs, seq_lens = zip(*batch)
-                    batch = list()
+    #             # count residues in current batch and add the last sequence length to
+    #             # avoid that batches with (n_res_batch > max_residues) get processed
+    #             n_res_batch = sum([s_len for _, _, s_len in batch]) + seq_len
+    #             if (
+    #                 len(batch) >= max_batch
+    #                 or n_res_batch >= max_residues
+    #                 or seq_idx == len(seq_dict)
+    #                 or seq_len > max_seq_len
+    #             ):
+    #                 pdb_ids, seqs, seq_lens = zip(*batch)
+    #                 batch = list()
 
-                    inputs = tokenizer.batch_encode_plus(
-                        seqs,
-                        add_special_tokens=True,
-                        padding="longest",
-                        return_tensors="pt",
-                    ).to(device)
-                    inputs = {k: v for k, v in inputs.items() if k != "token_type_ids"}
-                    #inputs = {k: v for k, v in inputs.items() if k != "token_type_ids"}
-                    inputs = {k: v.to(device) for k, v in inputs.items()}
-                    try:
-                        with torch.no_grad():
-                            outputs = model(**inputs)
-                    except RuntimeError:
-                        logger.warning(f" number of residues in batch {n_res_batch}")
-                        logger.warning(f" seq length is {seq_len}")
-                        logger.warning(f" ids are {pdb_ids}")
-                        logger.warning(
-                            "RuntimeError during embedding for {} (L={})".format(
-                                pdb_id, seq_len
-                            )
-                        )
-                        for id in pdb_ids:
-                            fail_ids.append(id)
-                        continue
+    #                 inputs = tokenizer.batch_encode_plus(
+    #                     seqs,
+    #                     add_special_tokens=True,
+    #                     padding="longest",
+    #                     return_tensors="pt",
+    #                 ).to(device)
+    #                 inputs = {k: v for k, v in inputs.items() if k != "token_type_ids"}
+    #                 #inputs = {k: v for k, v in inputs.items() if k != "token_type_ids"}
+    #                 inputs = {k: v.to(device) for k, v in inputs.items()}
+    #                 try:
+    #                     with torch.no_grad():
+    #                         outputs = model(**inputs)
+    #                 except RuntimeError:
+    #                     logger.warning(f" number of residues in batch {n_res_batch}")
+    #                     logger.warning(f" seq length is {seq_len}")
+    #                     logger.warning(f" ids are {pdb_ids}")
+    #                     logger.warning(
+    #                         "RuntimeError during embedding for {} (L={})".format(
+    #                             pdb_id, seq_len
+    #                         )
+    #                     )
+    #                     for id in pdb_ids:
+    #                         fail_ids.append(id)
+    #                     continue
 
             
-                    try:
-                        logits = outputs.logits
+    #                 try:
+    #                     logits = outputs.logits
 
-                        if plddt_head:
-                            plddt_pred = outputs.plddt_pred
-
-
-                        #probabilities = torch.nn.functional.softmax(logits, dim=-1)
-                        probabilities = toCPU(
-                            torch.max(F.softmax(logits, dim=-1), dim=-1, keepdim=True).values
-                        )
-                        # batch-size x seq_len x embedding_dim
-                        # extra token is added at the end of the seq
-                        for batch_idx, identifier in enumerate(pdb_ids):
-                            s_len = seq_lens[batch_idx]
-
-                             # slice off padding 
-                            pred = logits[batch_idx, 0:s_len, :].squeeze()
-
-                            pred = toCPU(
-                                torch.argmax(pred, dim=1, keepdim=True)
-                            ).astype(np.byte)
-
-                            if plddt_head:
-
-                                plddt_slice = toCPU(plddt_pred[batch_idx, 0:s_len])
-
-                            # doubles the length of time taken
-                            mean_prob = round(100 * probabilities[batch_idx, 0:s_len].mean().item(), 2)
-                            all_prob = probabilities[batch_idx, 0:s_len]
+    #                     if plddt_head:
+    #                         plddt_pred = outputs.plddt_pred
 
 
-                            if plddt_head:
+    #                     #probabilities = torch.nn.functional.softmax(logits, dim=-1)
+    #                     probabilities = toCPU(
+    #                         torch.max(F.softmax(logits, dim=-1), dim=-1, keepdim=True).values
+    #                     )
+    #                     # batch-size x seq_len x embedding_dim
+    #                     # extra token is added at the end of the seq
+    #                     for batch_idx, identifier in enumerate(pdb_ids):
+    #                         s_len = seq_lens[batch_idx]
+
+    #                          # slice off padding 
+    #                         pred = logits[batch_idx, 0:s_len, :].squeeze()
+
+    #                         pred = toCPU(
+    #                             torch.argmax(pred, dim=1, keepdim=True)
+    #                         ).astype(np.byte)
+
+    #                         if plddt_head:
+
+    #                             plddt_slice = toCPU(plddt_pred[batch_idx, 0:s_len])
+
+    #                         # doubles the length of time taken
+    #                         mean_prob = round(100 * probabilities[batch_idx, 0:s_len].mean().item(), 2)
+    #                         all_prob = probabilities[batch_idx, 0:s_len]
+
+
+    #                         if plddt_head:
 
                             
                             
 
-                                # predictions[record_id][identifier] = pred
-                                predictions[record_id][identifier] = (
-                                    pred,
-                                    mean_prob,
-                                    all_prob,
-                                    plddt_slice
-                                )
-                            else:
-                                # predictions[record_id][identifier] = pred
-                                predictions[record_id][identifier] = (
-                                    pred,
-                                    mean_prob,
-                                    all_prob
-                                )
+    #                             # predictions[record_id][identifier] = pred
+    #                             predictions[record_id][identifier] = (
+    #                                 pred,
+    #                                 mean_prob,
+    #                                 all_prob,
+    #                                 plddt_slice
+    #                             )
+    #                         else:
+    #                             # predictions[record_id][identifier] = pred
+    #                             predictions[record_id][identifier] = (
+    #                                 pred,
+    #                                 mean_prob,
+    #                                 all_prob
+    #                             )
 
                         
 
-                    except IndexError:
-                        logger.warning(
-                            "Index error during prediction for {} (L={})".format(
-                                pdb_id, seq_len
-                            )
-                        )
+    #                 except IndexError:
+    #                     logger.warning(
+    #                         "Index error during prediction for {} (L={})".format(
+    #                             pdb_id, seq_len
+    #                         )
+    #                     )
 
-                        for id in pdb_ids:
-                            fail_ids.append(id)
+    #                     for id in pdb_ids:
+    #                         fail_ids.append(id)
                         
-                        continue
+    #                     continue
 
 
 

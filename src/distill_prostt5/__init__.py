@@ -787,6 +787,9 @@ def infer(
 
     fail_ids = []
 
+    max_residues = 100000
+    max_seq_len = 100000
+
     # --- build + validate sequences in one pass ---
     for record_id, seq_record_dict in cds_dict.items():
         predictions[record_id] = {}

@@ -847,7 +847,7 @@ def infer(
         logger.info(f"Using minimum batch size of 1 and maximum batch size of {max_batch}")
         # define the sampling
 
-        def sample_probe_sequences(seqs, n=1000, seed=0):
+        def sample_probe_sequences(seqs, n=5000, seed=0):
             rng = random.Random(seed)
 
             if n >= len(seqs):
@@ -890,7 +890,6 @@ def infer(
                     total_time = 0.0
                     batches = 0
 
-
                     # iterate over real sequences in batches
                     for i in range(0, len(probe_seqs), bs):
                         batch_seqs = probe_seqs[i : i + bs]
@@ -905,11 +904,6 @@ def infer(
                         inputs.pop("token_type_ids", None)
                         inputs = {k: v.to(device) for k, v in inputs.items()}
 
-                        # warmup (once per batch is fine)
-                        with torch.no_grad():
-                            _ = model(**inputs)
-                        torch.cuda.synchronize()
-
                         # timing
                         torch.cuda.synchronize()
                         t0 = time.perf_counter()
@@ -919,7 +913,6 @@ def infer(
 
                         total_time += time.perf_counter() - t0
                         
-
                         batches += 1
 
                     time_per_token = total_time / total_tokens

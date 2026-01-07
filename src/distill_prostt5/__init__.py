@@ -708,6 +708,23 @@ def train(
     help="try fast inference",
     is_flag=True,
 )
+@click.option(
+    "--autobatch",
+    help="Autobatch",
+    is_flag=True,
+)
+@click.option(
+    "--step",
+    help="step size for autobatch",
+    type=int,
+    default=25,
+)
+@click.option(
+    "--max_batch",
+    help="max batch size for autobatch",
+    type=int,
+    default=750,
+)
 def infer(
     ctx,
     input,
@@ -727,6 +744,9 @@ def infer(
     max_residues,
     half,
     fast,
+    autobatch,
+    step,
+    max_batch,
     **kwargs,
 ):
     """Infers 3Di from input AA FASTA"""
@@ -815,11 +835,7 @@ def infer(
     #max_residues = 100000 passed as CLI
     max_seq_len = 100000
 
-    autobatch = True
-
     if autobatch:
-
-        max_batch = 500
 
         seqs = []
         for feat in cds_dict["proteins"].values():
@@ -850,6 +866,7 @@ def infer(
             probe_seqs,
             start_bs=1,
             max_bs=max_batch,
+            step=step # step size
             # safety=0.8,
             # max_res_cap=100000,
         ):
@@ -857,7 +874,6 @@ def infer(
             model.half()
 
             bs = start_bs
-            step = 20
             results = []
 
             while bs <= max_bs:
@@ -910,7 +926,6 @@ def infer(
 
 
                     token_per_batch = math.floor(total_tokens / batches)
-
 
                 
                     results.append({

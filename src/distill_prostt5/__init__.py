@@ -3,6 +3,7 @@
 import click
 import os
 import csv
+import math
 import time
 import torch
 import numpy as np
@@ -870,41 +871,59 @@ def infer(
 
                     logger.info(f"Running with batch size {bs} and tokens {n_tokens}")
 
-                    inputs = tokenizer(
-                        seqs,
-                        padding=True,
-                        return_tensors="pt",
-                    )
-                    inputs.pop("token_type_ids", None)
-                    inputs = {k: v.to(device) for k, v in inputs.items()}
+                    model.eval()
 
-                    # warmup
-                    with torch.no_grad():
-                        outputs = model(**inputs)
-                    torch.cuda.synchronize()
+                    total_tokens = 0
+                    total_time = 0.0
+                    batches = 0
 
-                    # timing
-                    times = []
-                    for _ in range(1): 
+
+                    # iterate over real sequences in batches
+                    for i in range(0, len(seqs), bs):
+                        batch_seqs = seqs[i : i + bs]
+                        n_tokens = sum(len(s) for s in batch_seqs)
+                        total_tokens += n_tokens
+
+                        inputs = tokenizer(
+                            batch_seqs,
+                            padding=True,
+                            return_tensors="pt",
+                        )
+                        inputs.pop("token_type_ids", None)
+                        inputs = {k: v.to(device) for k, v in inputs.items()}
+
+                        # warmup (once per batch is fine)
+                        with torch.no_grad():
+                            _ = model(**inputs)
+                        torch.cuda.synchronize()
+
+                        # timing
                         torch.cuda.synchronize()
                         t0 = time.perf_counter()
                         with torch.no_grad():
-                            outputs = model(**inputs)
+                            _ = model(**inputs)
                         torch.cuda.synchronize()
-                        times.append(time.perf_counter() - t0)
 
-                    elapsed = np.median(times)
-                    tpt = elapsed / n_tokens
+                        total_time += time.perf_counter() - t0
+
+                        batches += 1
+
+                    time_per_token = total_time / total_tokens
 
 
+                    token_per_batch = math.floor(total_tokens / batches)
+
+
+                
                     results.append({
                         "bs": bs,
-                        "tokens": n_tokens,
-                        "time": elapsed,
-                        "time_per_token": tpt,
+                        "tokens_per_batch": token_per_batch,
+                        "time": total_time,
+                        "time_per_token": time_per_token,
                     })
 
-                    logger.info(f"Time elapsed {elapsed}")
+                    logger.info(f"Time elapsed {total_time}")
+                    logger.info(f"Tokens per batch {token_per_batch}")
 
                     bs += step
 
@@ -921,7 +940,7 @@ def infer(
                 raise RuntimeError("No batch size fits on this GPU")
             
             best_bs = best_bs["bs"]
-            best_tokens = best_bs["tokens"]
+            best_tokens = best_bs["tokens_per_batch"]
             # best_tpt = best_bs["time_per_token"]
 
             return best_bs, best_tokens

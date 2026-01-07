@@ -857,9 +857,6 @@ def infer(
             model.half()
 
             bs = start_bs
-            last_good = None
-
-            bs = start_bs
             step = 20
             results = []
 
@@ -932,8 +929,6 @@ def infer(
                     torch.cuda.empty_cache()
                     break
 
-            if last_good is None:
-                raise RuntimeError("Auto-tuning failed even at batch_size=1")
             
             if results:
                 best_bs = min(results, key=lambda x: x["time_per_token"])

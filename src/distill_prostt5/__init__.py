@@ -936,13 +936,13 @@ def infer(
             best_entry = min(results, key=lambda x: x["time_per_token"])
 
             best_bs = best_entry["bs"]
-            best_tokens = best_entry["tokens"]
+            best_residues = best_entry["tokens_per_batch"]
             # best_tpt = best_bs["time_per_token"]
 
             logger.info(f"best batch size: {best_bs}")
-            logger.info(f"best max residues: {best_tokens}")
+            logger.info(f"best max residues: {best_residues}")
 
-            return best_bs, best_tokens
+            return best_bs, best_residues
 
         probe_seqs = sample_probe_sequences(seqs, n=max_batch)
 

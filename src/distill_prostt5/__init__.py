@@ -26,6 +26,7 @@ from  tqdm import tqdm
 from loguru import logger
 import random
 import shutil
+from collections import defaultdict
 
 seed = 30
 torch.manual_seed(seed)
@@ -758,6 +759,12 @@ def infer(
 ):
     """Infers 3Di from input AA FASTA"""
 
+    def chunk_sequence(seq, max_len):
+        """Yield (start, subseq) chunks preserving order."""
+        for start in range(0, len(seq), max_len):
+            yield start, seq[start:start + max_len]
+
+
     if cpu:
         device = 'cpu'
     else:
@@ -976,12 +983,15 @@ def infer(
 
     if fast:
 
+        MAX_CHUNK_LEN = 1024
+
         # --- build + validate sequences in one pass ---
         for record_id, seq_record_dict in cds_dict.items():
-            # predictions[record_id] = {}
-            batch_predictions[record_id] = {}
+            batch_predictions = {}
+            chunk_store = defaultdict(dict)
+
             seq_items = []
-            for k, feat in cds_dict[record_id].items():
+            for k, feat in seq_record_dict.items():
                 v = feat.qualifiers.get("translation")
                 if v and isinstance(v, str):
                     seq = v.replace("U", "X").replace("Z", "X").replace("O", "X")
@@ -989,21 +999,28 @@ def infer(
                 else:
                     logger.info(f"Protein header {k} is corrupt. It will be saved in fails.tsv")
                     fail_ids.append(k)
-            
+
             # --- keep original order ---
             original_keys = list(seq_record_dict.keys())
-            # --- sort once ---
+
+            # --- sort once (longest first) ---
             seq_items.sort(key=lambda x: x[2], reverse=True)
 
             batch = []
             res_batch = 0
 
-            # wrap seq_items in tqdm
-            for idx, (pid, seq, slen) in enumerate(tqdm(seq_items, desc="Processing Sequences"), 1):
-                batch.append((pid, seq, slen))
-                res_batch += slen
+            for idx, (pid, seq, slen) in enumerate(
+                tqdm(seq_items, desc="Processing Sequences"), 1
+            ):
 
-                
+                if slen > MAX_CHUNK_LEN:
+                    for chunk_idx, (start, subseq) in enumerate(chunk_sequence(seq, MAX_CHUNK_LEN)):
+                        chunk_pid = f"{pid}__chunk{chunk_idx}"
+                        batch.append((chunk_pid, subseq, len(subseq)))
+                        res_batch += len(subseq)
+                else:
+                    batch.append((pid, seq, slen))
+                    res_batch += slen
 
                 if (
                     len(batch) >= batch_size
@@ -1033,29 +1050,23 @@ def infer(
                         continue
 
                     logits = outputs.logits  # [B, L, C]
-
-                    # --- predictions (GPU) ---
                     pred_ids = torch.argmax(logits, dim=-1)
 
-                    # --- probabilities (optional, expensive) ---
                     store_probs = True
                     if store_probs:
                         probs = torch.softmax(logits, dim=-1).max(dim=-1).values
 
-                    # --- plddt ---
                     if plddt_head:
                         plddt = outputs.plddt_pred
 
-                    # --- move once to CPU ---
                     pred_ids = pred_ids.cpu().numpy().astype(np.int8)
                     if store_probs:
                         probs = probs.cpu().numpy()
                     if plddt_head:
                         plddt = plddt.cpu().numpy()
 
-                    for i, pid in enumerate(pdb_ids):
+                    for i, pid_out in enumerate(pdb_ids):
                         L = seq_lens[i]
-
                         pred = pred_ids[i, :L]
 
                         if store_probs:
@@ -1065,24 +1076,67 @@ def infer(
                             mean_prob = None
                             all_prob = None
 
-                        if plddt_head:
-                            batch_predictions[pid] = (
+                        if "__chunk" in pid_out:
+                            base_id, chunk_tag = pid_out.split("__chunk")
+                            chunk_idx = int(chunk_tag)
+
+                            chunk_store[base_id][chunk_idx] = (
                                 pred,
-                                mean_prob,
                                 all_prob,
-                                plddt[i, :L],
+                                plddt[i, :L] if plddt_head else None,
                             )
                         else:
-                            batch_predictions[pid] = (
+                            batch_predictions[pid_out] = (
                                 pred,
                                 mean_prob,
                                 all_prob,
+                                plddt[i, :L] if plddt_head else None,
                             )
-            # reorder to match the original FASTA
+
+            # --- recombine chunked sequences ---
+            for pid, chunks in chunk_store.items():
+                preds = []
+                probs_all = []
+                plddts = []
+
+                for idx in sorted(chunks):
+                    pred, prob, plddt = chunks[idx]
+                    preds.append(pred)
+                    if prob is not None:
+                        probs_all.append(prob)
+                    if plddt is not None:
+                        plddts.append(plddt)
+
+                pred_full = np.concatenate(preds)
+
+                if probs_all:
+                    probs_full = np.concatenate(probs_all)
+                    mean_prob = round(100 * probs_full.mean(), 2)
+                else:
+                    probs_full = None
+                    mean_prob = None
+
+                if plddt_head:
+                    plddt_full = np.concatenate(plddts)
+                    batch_predictions[pid] = (
+                        pred_full,
+                        mean_prob,
+                        probs_full,
+                        plddt_full,
+                    )
+                else:
+                    batch_predictions[pid] = (
+                        pred_full,
+                        mean_prob,
+                        probs_full,
+                    )
+
+            # --- reorder to match original FASTA ---
             predictions[record_id] = {}
             for k in original_keys:
                 if k in batch_predictions:
                     predictions[record_id][k] = batch_predictions[k]
+
 
     else:
 
@@ -1356,6 +1410,7 @@ def precompute_plddt(
 
 
     logger.info(f"Saved to {precompute_path}")
+
 
 
 

@@ -1107,7 +1107,10 @@ def infer(
                 plddts = []
 
                 for idx in sorted(chunks):
-                    pred, prob, plddt = chunks[idx]
+                    if plddt_head:
+                        pred, prob, plddt = chunks[idx]
+                    else:
+                        pred, prob = chunks[idx]
                     preds.append(pred)
                     if prob is not None:
                         probs_all.append(prob)

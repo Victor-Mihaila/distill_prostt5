@@ -1087,18 +1087,34 @@ def infer(
                             base_id, chunk_tag = pid_out.split("__chunk")
                             chunk_idx = int(chunk_tag)
 
-                            chunk_store[base_id][chunk_idx] = (
-                                pred,
-                                all_prob,
-                                plddt[i, :L] if plddt_head else None,
-                            )
+
+                            if plddt_head:
+                                chunk_store[base_id][chunk_idx] = (
+                                    pred,
+                                    all_prob,
+                                    plddt[i, :L] if plddt_head else None,
+                                )
+                            else:
+
+                                chunk_store[base_id][chunk_idx] = (
+                                    pred,
+                                    all_prob)
+
                         else:
-                            batch_predictions[pid_out] = (
-                                pred,
-                                mean_prob,
-                                all_prob,
-                                plddt[i, :L] if plddt_head else None,
-                            )
+                            if plddt_head:
+                                batch_predictions[pid_out] = (
+                                    pred,
+                                    mean_prob,
+                                    all_prob,
+                                    plddt[i, :L] 
+                                )
+                            else:
+                                batch_predictions[pid_out] = (
+                                    pred,
+                                    mean_prob,
+                                    all_prob
+                                )
+
 
             # --- recombine chunked sequences ---
             for pid, chunks in chunk_store.items():

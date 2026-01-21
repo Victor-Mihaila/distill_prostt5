@@ -479,31 +479,31 @@ def parse_substitution_matrix_seq(matrix_str):
     return header, mat
 
 # Use the same AAs list as before.
-def generate_profile_for_sequence(seq, sub_matrix):
-    profile = []
-    for res in seq:
-        r = res.upper()
-        if r not in sub_matrix:
-            r = 'X'
-        # In your seq_to_db.py version, if r=='X' you skip the residue.
-        if r == 'X':
-            continue
-        row = sub_matrix[r]
-        for score in row:
-            # Scale the score by 4
-            scaled = score * 4
-            if scaled < 0:
-                val = int(scaled - 0.5)
-            else:
-                val = int(scaled + 0.5)
-            val = max(-128, min(val, 127))
-            profile.append(np.int8(val))
-        profile.append(np.int8(AAs.index(r)))
-        profile.append(np.int8(AAs.index(r)))
-        profile.append(np.int8(0))
-        profile.append(np.int8(0))
-        profile.append(np.int8(0))
-    return profile
+# def generate_profile_for_sequence(seq, sub_matrix):
+#     profile = []
+#     for res in seq:
+#         r = res.upper()
+#         if r not in sub_matrix:
+#             r = 'X'
+#         # In your seq_to_db.py version, if r=='X' you skip the residue.
+#         if r == 'X':
+#             continue
+#         row = sub_matrix[r]
+#         for score in row:
+#             # Scale the score by 4
+#             scaled = score * 4
+#             if scaled < 0:
+#                 val = int(scaled - 0.5)
+#             else:
+#                 val = int(scaled + 0.5)
+#             val = max(-128, min(val, 127))
+#             profile.append(np.int8(val))
+#         profile.append(np.int8(AAs.index(r)))
+#         profile.append(np.int8(AAs.index(r)))
+#         profile.append(np.int8(0))
+#         profile.append(np.int8(0))
+#         profile.append(np.int8(0))
+#     return profile
 
 def pack_profile_seq(profile):
     parts = []
@@ -533,14 +533,56 @@ def read_sequences(seq_db_file, seq_index_file):
     print("First 5 sequences:", sequences[:5])
     return sequences
 
+AA_TO_INDEX = {aa: i for i, aa in enumerate(AAs)}
+
+def precompute_sub_blocks(sub_matrix):
+    blocks = {}
+
+    for aa, row in sub_matrix.items():
+        if aa == 'X':
+            continue
+
+        row = np.asarray(row, dtype=np.float32)
+
+        scaled = row * 4.0
+        scaled = np.where(scaled < 0, scaled - 0.5, scaled + 0.5)
+        scaled = np.clip(scaled, -128, 127).astype(np.int8)
+
+        idx = AA_TO_INDEX[aa]
+
+        block = bytearray(25)
+        block[0:20] = scaled
+        block[20] = idx
+        block[21] = idx
+        block[22] = 0
+        block[23] = 0
+        block[24] = 0
+
+        blocks[aa] = bytes(block)
+
+    return blocks
+
+def generate_profile_for_sequence(seq, sub_blocks):
+    out = bytearray()
+
+    for res in seq:
+        aa = res.upper()
+        block = sub_blocks.get(aa)
+        if block is None:
+            continue  #  X-skip 
+        out.extend(block)
+
+    return out
+
 def build_database_seq(seq_db_file, seq_index_file, output_db="profile", output_index="profile.idx"):
     header, sub_matrix = parse_substitution_matrix_seq(blosum62_str)
     seqs = read_sequences(seq_db_file, seq_index_file)
     parts = []
     index_lines = []
     current_offset = 0
+    sub_blocks = precompute_sub_blocks(sub_matrix)
     for key, seq in tqdm(seqs, desc="Processing sequences"):
-        profile = generate_profile_for_sequence(seq, sub_matrix)
+        profile = generate_profile_for_sequence(seq, sub_blocks)
         packed = pack_profile_seq(profile)
         parts.append(packed)
         length = len(packed)

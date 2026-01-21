@@ -256,6 +256,7 @@ backprobs = [0.0489372, 0.0306991, 0.101049, 0.0329671, 0.0276149,
              0.0150238, 0.0215826, 0.0783843, 0.0512926, 0.0264886,
              0.0610702, 0.0201311, 0.215998, 0.0310265, 0.0295417,
              0.00001]
+backprobs = np.asarray(backprobs, dtype=np.float32)[:20] # done need X
 bitFactor = 8
 
 def parse_profile_from_block(block_lines):
@@ -302,44 +303,124 @@ def parse_profiles(filename):
     
     return profile_data
 
+
 def computeLogPSSM(profile_matrix):
-    # odds = profile_matrix / backprobs[:-1]
-    # odds_safe = np.where(odds > 0.0, odds, 0.0)
-    consensus = np.int8(np.argmax(profile_matrix, axis=1))
-    # consensus = np.int8(np.argmax(profile_matrix, axis=1))
-    profile = []
-    query_length, profile_aa_size = profile_matrix.shape
-    for pos in range(query_length):
-        for aa in range(profile_aa_size):
-            aaProb = profile_matrix[pos][aa]
-            x = aaProb / backprobs[aa]
-            # Guard against non-positive values
-            if x <= 0:
-                logProb = -128.0
-            else:
-                logProb = math.log2(x)
-            pssmVal = logProb * bitFactor
-            if pssmVal < 0.0:
-                pssmVal = int(pssmVal - 0.5)
-            else:
-                pssmVal = int(pssmVal + 0.5)
-            truncPssmVal = max(-128, min(pssmVal, 127))
-            profile.append(np.int8(truncPssmVal))
-    return profile, consensus
+    consensus = np.argmax(profile_matrix, axis=1).astype(np.int8)
+
+    odds = profile_matrix / backprobs[None, :]
+
+    # log2 only where odds > 0
+    log_probs = np.empty_like(odds, dtype=np.float32)
+    log_probs.fill(-128.0)          # default for invalid
+    mask = odds > 0.0
+    log_probs[mask] = np.log2(odds[mask])
+
+    pssm = log_probs * bitFactor
+
+    # round exactly like original
+    pssm = np.where(pssm < 0, pssm - 0.5, pssm + 0.5)
+
+    # clip and cast
+    pssm = np.clip(pssm, -128, 127).astype(np.int8)
+
+    return pssm.ravel(), consensus
+
+# works but gives warning - so better to clip and cast after as above
+
+# def computeLogPSSM(profile_matrix):
+#     # profile_matrix: (L, 20)
+#     # backprobs: (20,)
+#     # bitFactor: scalar
+
+#     # consensus
+#     consensus = np.argmax(profile_matrix, axis=1).astype(np.int8)
+
+#     # odds
+#     odds = profile_matrix / backprobs[None, :]
+
+#     # guard against non-positive
+#     odds_safe = np.where(odds > 0.0, odds, np.nan)
+
+#     # log2
+#     log_probs = np.log2(odds_safe)
+
+#     # scale
+#     pssm = log_probs * bitFactor
+
+#     # round like your logic
+#     pssm = np.where(pssm < 0, pssm - 0.5, pssm + 0.5)
+#     pssm = pssm.astype(np.int32)
+
+#     # clip to int8 range
+#     pssm = np.clip(pssm, -128, 127)
+
+#     # replace invalids
+#     pssm = np.nan_to_num(pssm, nan=-128).astype(np.int8)
+
+#     # flatten (L*20,)
+#     return pssm.ravel(), consensus
+
+# def computeLogPSSM(profile_matrix):
+#     # odds = profile_matrix / backprobs[:-1]
+#     # odds_safe = np.where(odds > 0.0, odds, 0.0)
+#     consensus = np.int8(np.argmax(profile_matrix, axis=1))
+#     # consensus = np.int8(np.argmax(profile_matrix, axis=1))
+#     profile = []
+#     query_length, profile_aa_size = profile_matrix.shape
+#     for pos in range(query_length):
+#         for aa in range(profile_aa_size):
+#             aaProb = profile_matrix[pos][aa]
+#             x = aaProb / backprobs[aa]
+#             # Guard against non-positive values
+#             if x <= 0:
+#                 logProb = -128.0
+#             else:
+#                 logProb = math.log2(x)
+#             pssmVal = logProb * bitFactor
+#             if pssmVal < 0.0:
+#                 pssmVal = int(pssmVal - 0.5)
+#             else:
+#                 pssmVal = int(pssmVal + 0.5)
+#             truncPssmVal = max(-128, min(pssmVal, 127))
+#             profile.append(np.int8(truncPssmVal))
+#     return profile, consensus
 
 def toBuffer_pssm(profile, consensus):
-    result = []
-    query_length = len(consensus)
-    for pos in range(query_length):
-        for aa in range(20):
-            result.append(struct.pack('b', profile[20 * pos + aa]))
-        # Append consensus twice and three zeros (unsigned bytes)
-        result.append(struct.pack('B', consensus[pos]))
-        result.append(struct.pack('B', consensus[pos]))
-        result.append(struct.pack('B', 0))
-        result.append(struct.pack('B', 0))
-        result.append(struct.pack('B', 0))
-    return b"".join(result)
+    L = len(consensus)
+    buf = bytearray(L * 25)
+
+    offset = 0
+    prof = memoryview(profile)
+
+    for i in range(L):
+        # 20 profile bytes
+        buf[offset:offset+20] = prof[i*20:(i+1)*20]
+        offset += 20
+
+        c = consensus[i]
+        buf[offset]   = c
+        buf[offset+1] = c
+        buf[offset+2] = 0
+        buf[offset+3] = 0
+        buf[offset+4] = 0
+        offset += 5
+
+    return bytes(buf)
+
+
+# def toBuffer_pssm(profile, consensus):
+#     result = []
+#     query_length = len(consensus)
+#     for pos in range(query_length):
+#         for aa in range(20):
+#             result.append(struct.pack('b', profile[20 * pos + aa]))
+#         # Append consensus twice and three zeros (unsigned bytes)
+#         result.append(struct.pack('B', consensus[pos]))
+#         result.append(struct.pack('B', consensus[pos]))
+#         result.append(struct.pack('B', 0))
+#         result.append(struct.pack('B', 0))
+#         result.append(struct.pack('B', 0))
+#     return b"".join(result)
 
 def build_lookup(filename):
     lookup = {}
@@ -398,37 +479,42 @@ def parse_substitution_matrix_seq(matrix_str):
     return header, mat
 
 # Use the same AAs list as before.
-def generate_profile_for_sequence(seq, sub_matrix):
-    profile = []
-    for res in seq:
-        r = res.upper()
-        if r not in sub_matrix:
-            r = 'X'
-        # In your seq_to_db.py version, if r=='X' you skip the residue.
-        if r == 'X':
-            continue
-        row = sub_matrix[r]
-        for score in row:
-            # Scale the score by 4
-            scaled = score * 4
-            if scaled < 0:
-                val = int(scaled - 0.5)
-            else:
-                val = int(scaled + 0.5)
-            val = max(-128, min(val, 127))
-            profile.append(np.int8(val))
-        profile.append(np.int8(AAs.index(r)))
-        profile.append(np.int8(AAs.index(r)))
-        profile.append(np.int8(0))
-        profile.append(np.int8(0))
-        profile.append(np.int8(0))
-    return profile
+# def generate_profile_for_sequence(seq, sub_matrix):
+#     profile = []
+#     for res in seq:
+#         r = res.upper()
+#         if r not in sub_matrix:
+#             r = 'X'
+#         # In your seq_to_db.py version, if r=='X' you skip the residue.
+#         if r == 'X':
+#             continue
+#         row = sub_matrix[r]
+#         for score in row:
+#             # Scale the score by 4
+#             scaled = score * 4
+#             if scaled < 0:
+#                 val = int(scaled - 0.5)
+#             else:
+#                 val = int(scaled + 0.5)
+#             val = max(-128, min(val, 127))
+#             profile.append(np.int8(val))
+#         profile.append(np.int8(AAs.index(r)))
+#         profile.append(np.int8(AAs.index(r)))
+#         profile.append(np.int8(0))
+#         profile.append(np.int8(0))
+#         profile.append(np.int8(0))
+#     return profile
+
+# def pack_profile_seq(profile):
+#     parts = []
+#     for val in profile:
+#         parts.append(struct.pack('b', val))
+#     return b"".join(parts)
 
 def pack_profile_seq(profile):
-    parts = []
-    for val in profile:
-        parts.append(struct.pack('b', val))
-    return b"".join(parts)
+    # vectorised
+    profile = np.asarray(profile, dtype=np.int8)
+    return profile.tobytes()
 
 def read_sequences(seq_db_file, seq_index_file):
     with open(seq_db_file, "rb") as f:
@@ -452,14 +538,57 @@ def read_sequences(seq_db_file, seq_index_file):
     print("First 5 sequences:", sequences[:5])
     return sequences
 
+AA_TO_INDEX = {aa: i for i, aa in enumerate(AAs)}
+
+def precompute_sub_blocks(sub_matrix):
+    blocks = {}
+
+    for aa, row in sub_matrix.items():
+        if aa == 'X':
+            continue
+
+        row = np.asarray(row, dtype=np.float32)
+
+        scaled = row * 4.0
+        scaled = np.where(scaled < 0, scaled - 0.5, scaled + 0.5)
+        scaled = np.clip(scaled, -128, 127).astype(np.int8)
+
+        idx = AA_TO_INDEX[aa]
+
+        block = bytearray(25)
+        block[0:20] = scaled.view(np.uint8).tobytes()
+        block[20] = idx
+        block[21] = idx
+        block[22] = 0
+        block[23] = 0
+        block[24] = 0
+
+        blocks[aa] = bytes(block)
+
+    return blocks
+
+
+def generate_profile_for_sequence(seq, sub_blocks):
+    out = bytearray()
+
+    for res in seq:
+        aa = res.upper()
+        block = sub_blocks.get(aa)
+        if block is None:
+            continue  #  X-skip 
+        out.extend(block)
+
+    return out
+
 def build_database_seq(seq_db_file, seq_index_file, output_db="profile", output_index="profile.idx"):
     header, sub_matrix = parse_substitution_matrix_seq(blosum62_str)
     seqs = read_sequences(seq_db_file, seq_index_file)
     parts = []
     index_lines = []
     current_offset = 0
+    sub_blocks = precompute_sub_blocks(sub_matrix)
     for key, seq in tqdm(seqs, desc="Processing sequences"):
-        profile = generate_profile_for_sequence(seq, sub_matrix)
+        profile = generate_profile_for_sequence(seq, sub_blocks)
         packed = pack_profile_seq(profile)
         parts.append(packed)
         length = len(packed)

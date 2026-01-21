@@ -303,38 +303,62 @@ def parse_profiles(filename):
     
     return profile_data
 
-def computeLogPSSM(profile_matrix):
-    # profile_matrix: (L, 20)
-    # backprobs: (20,)
-    # bitFactor: scalar
 
-    # consensus
+def computeLogPSSM(profile_matrix):
     consensus = np.argmax(profile_matrix, axis=1).astype(np.int8)
 
-    # odds
     odds = profile_matrix / backprobs[None, :]
 
-    # guard against non-positive
-    odds_safe = np.where(odds > 0.0, odds, np.nan)
+    # log2 only where odds > 0
+    log_probs = np.empty_like(odds, dtype=np.float32)
+    log_probs.fill(-128.0)          # default for invalid
+    mask = odds > 0.0
+    log_probs[mask] = np.log2(odds[mask])
 
-    # log2
-    log_probs = np.log2(odds_safe)
-
-    # scale
     pssm = log_probs * bitFactor
 
-    # round like your logic
+    # round exactly like original
     pssm = np.where(pssm < 0, pssm - 0.5, pssm + 0.5)
-    pssm = pssm.astype(np.int32)
 
-    # clip to int8 range
-    pssm = np.clip(pssm, -128, 127)
+    # clip and cast
+    pssm = np.clip(pssm, -128, 127).astype(np.int8)
 
-    # replace invalids
-    pssm = np.nan_to_num(pssm, nan=-128).astype(np.int8)
-
-    # flatten (L*20,)
     return pssm.ravel(), consensus
+
+# works but gives warning - so better to clip and cast after as above
+
+# def computeLogPSSM(profile_matrix):
+#     # profile_matrix: (L, 20)
+#     # backprobs: (20,)
+#     # bitFactor: scalar
+
+#     # consensus
+#     consensus = np.argmax(profile_matrix, axis=1).astype(np.int8)
+
+#     # odds
+#     odds = profile_matrix / backprobs[None, :]
+
+#     # guard against non-positive
+#     odds_safe = np.where(odds > 0.0, odds, np.nan)
+
+#     # log2
+#     log_probs = np.log2(odds_safe)
+
+#     # scale
+#     pssm = log_probs * bitFactor
+
+#     # round like your logic
+#     pssm = np.where(pssm < 0, pssm - 0.5, pssm + 0.5)
+#     pssm = pssm.astype(np.int32)
+
+#     # clip to int8 range
+#     pssm = np.clip(pssm, -128, 127)
+
+#     # replace invalids
+#     pssm = np.nan_to_num(pssm, nan=-128).astype(np.int8)
+
+#     # flatten (L*20,)
+#     return pssm.ravel(), consensus
 
 # def computeLogPSSM(profile_matrix):
 #     # odds = profile_matrix / backprobs[:-1]
